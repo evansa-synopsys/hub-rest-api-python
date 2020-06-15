@@ -25,9 +25,10 @@ import os
 import glob
 import pandas
 
-parser = argparse.ArgumentParser("A program to create consolidated Source report for sub projects")
+parser = argparse.ArgumentParser("A program to create consolidated reports for sub projects")
 parser.add_argument("project_name")
 parser.add_argument("version_name")
+parser.add_argument('-r', '--refresh', action='store_true', help='delete existing reports in the results directory and regenerate')
 
 args = parser.parse_args()
 hub = HubInstance()
@@ -40,6 +41,14 @@ timestamp = time.strftime('%m_%d_%Y_%H_%M')
 file_out = (projname + '_' + "Consolidated_src_report-" + timestamp)
 file_out = (file_out + ".csv")
 
+rootDir = os.path.dirname(os.path.realpath(__file__))
+
+def doRefresh(dir_name):
+    tempDir = os.path.join(rootDir, dir_name)
+    print("tempDir=%s" % tempDir)
+    for fileName in os.listdir(tempDir):
+        print("Removing stale directory %s" % fileName)
+        os.remove(os.path.join(tempDir, fileName))
 
 class FailedReportDownload(Exception):
     pass
@@ -75,13 +84,13 @@ def genreport():
         if len(component['activityData']) == 0:
             # Above checks length of output from activityData is >0. If equals 0, is sub-project.
             print('activityData is empty, is subproject')
-            version = hub.get_project_version_by_name(component['componentName'],component['componentVersionName'])
+            version = hub.get_project_version_by_name(component['componentName'], component['componentVersionName'])
             # Above determines the project name from hub.get_project_version_by_name, passing the component name
             # and component version name pieces.
-            result = hub.create_version_reports(version=version, report_list=FILES, format="CSV")
-            # Generates reports in subprojects for FILES (source) report,
-            # Using the version object (line 21) to say which reports are needed
             # prints out success/error code.
+
+            result = hub.create_vuln_status_report(format="CSV")
+
             if result.status_code == 201:
                 print("Successfully created reports ({}) for project {} and version {}".format(
                     FILES, args.project_name, args.version_name))
@@ -89,9 +98,9 @@ def genreport():
                 download_report(location, subname)
             else:
                 print("Failed to create reports for project {} version {}, status code returned {}".format(
-                args.project_name, args.version_name, result.status_code))
-        elif len(component['activityData']) != 0:
-            print('is OSS component, no report to download')
+                    args.project_name, args.version_name, result.status_code))
+        # elif len(component['activityData']) != 0:
+        #     print('is OSS component, no report to download')
 
 
 def checkdirs():
@@ -103,6 +112,9 @@ def checkdirs():
     if os.path.isdir('./results') == False:
         os.makedirs('./results')
         print('made results directory')
+    elif args.refresh and len(os.listdir('./results')) != 0:
+        print('refreshing results')
+        doRefresh('results')
     else:
         print('results directory already exists')
 
@@ -111,7 +123,7 @@ def unzip():
     for filename in os.listdir("."):
         if filename.endswith(".zip"):
             shutil.move(filename, './temp/')
-    curdir = (os.getcwd() + './temp/')
+    curdir = os.path.join(os.getcwd(),'temp')
     os.chdir(curdir)
     for zipfile in os.listdir(curdir):
         with ZipFile(zipfile, 'r') as zipObj:

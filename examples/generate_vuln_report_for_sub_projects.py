@@ -48,8 +48,11 @@ def checkdirs():
     if os.path.isdir('./temp') == False:
         os.makedirs('./temp')
         print('made temp directory')
+    elif len(os.listdir('./temp')) != 0:
+        doRefresh('temp')
     else:
         print('temp directory already exists')
+
     if os.path.isdir('./results') == False:
         os.makedirs('./results')
         print('made results directory')
@@ -123,6 +126,7 @@ def get_component_vuln_information(bom_component):
     return result
 
 
+# return a dictionary with remediation details from a call to /REMEDIATION endpoint
 def build_component_remediation_data():
     remediation_data = dict()
     for info in vulnerable_components['items']:
@@ -140,15 +144,31 @@ def build_component_remediation_data():
 vuln_component_remediation_info = build_component_remediation_data()
 
 
+# return a dictionary with the version url mapped to the latestAfterCurrent name and date
+# after a call to the /REMEDIATING endpoint
+def get_component_remediating_data(comp_version_name_url):
+    remediating_data = dict()
+    url = "{}{}".format(comp_version_name_url, "/remediating")
+    response = hub.execute_get(url)
+    if response.status_code == 200:
+        rj = response.json()
+        r_key = comp_version_name_url
+        r_val = rj
+        remediating_data.update({r_key: r_val})
+    return remediating_data
+
+
 def get_header():
     return ["Package Path and Type", "Component Name", "Component Version Name", "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
             "Remediation Created At", "Solution", "Solution Date", "Remediation Comment", "License Names",
             "License Family",
-            "Download URL", "Component Description"]
+            "Download URL", "Component Description", "Latest Version Available", "Latest Version Release Date"]
 
 
 subprojects = list()
+
+
 def generate_child_reports():
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M')
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
@@ -163,6 +183,8 @@ def generate_child_reports():
         url_and_des = get_component_URL_and_description(component)
         license_names_and_family = get_license_names_and_family(component)
         component_vuln_information = get_component_vuln_information(component)
+        comp_version_url = component.get('componentVersion')
+        component_remediating_info = get_component_remediating_data(comp_version_url)
         row = []
         if count == 0:
             header = get_header()
@@ -190,6 +212,14 @@ def generate_child_reports():
                 row.append("None")
             else:
                 row.append(ud)
+
+        try:
+            row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+            row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+        except (KeyError, TypeError):
+            row.append(component['componentVersionName'])
+            row.append(component['releasedOn'])
+
         row_list.append(row.copy())
 
     elif len(component_vuln_information) > 0:
@@ -208,19 +238,19 @@ def generate_child_reports():
                 row.append("".join(v_solution))
             except KeyError:
                 row.append("None")
-                print("Solution not available for - {}".format(v_name_key))
+                # print("Solution not available for - {}".format(v_name_key))
 
             try:
                 row.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
             except KeyError:
                 row.append("None")
-                print("Solution Date not available for - {}".format(v_name_key))
+                # print("Solution Date not available for - {}".format(v_name_key))
 
             try:
                 row.append(vuln_component_remediation_info.get(v_name_key)['comment'])
             except KeyError:
                 row.append("None")
-                print("No remediation comment for - {}".format(v_name_key))
+                # print("No remediation comment for - {}".format(v_name_key))
 
             row.append(license_names_and_family[0])
             row.append(license_names_and_family[1])
@@ -230,6 +260,13 @@ def generate_child_reports():
                     row.append("None")
                 else:
                     row.append(ud)
+
+            try:
+                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+            except (KeyError, TypeError):
+                row.append(component['componentVersionName'])
+                row.append(component['releasedOn'])
 
             row_list.append(row.copy())
             row = row[0:3]
@@ -253,6 +290,8 @@ def genreport():
         url_and_des = get_component_URL_and_description(component)
         license_names_and_family = get_license_names_and_family(component)
         component_vuln_information = get_component_vuln_information(component)
+        comp_version_url = component.get('componentVersion')
+        component_remediating_info = get_component_remediating_data(comp_version_url)
         row = []
         if count == 0:
             header = get_header()
@@ -280,6 +319,14 @@ def genreport():
                     row.append("None")
                 else:
                     row.append(ud)
+
+            try:
+                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+            except (KeyError, TypeError):
+                row.append(component['componentVersionName'])
+                row.append(component['releasedOn'])
+
             row_list.append(row.copy())
 
         elif len(component_vuln_information) > 0:
@@ -300,19 +347,19 @@ def genreport():
                     row.append("".join(v_solution))
                 except KeyError:
                     row.append("None")
-                    print("Solution not available for - {}".format(v_name_key))
+                    # print("Solution not available for - {}".format(v_name_key))
 
                 try:
                     row.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
                 except KeyError:
                     row.append("None")
-                    print("Solution Date not available for - {}".format(v_name_key))
+                    # print("Solution Date not available for - {}".format(v_name_key))
 
                 try:
                     row.append(vuln_component_remediation_info.get(v_name_key)['comment'])
                 except KeyError:
                     row.append("None")
-                    print("No remediation comment for - {}".format(v_name_key))
+                    # print("No remediation comment for - {}".format(v_name_key))
 
                 row.append(license_names_and_family[0])
                 row.append(license_names_and_family[1])
@@ -323,6 +370,13 @@ def genreport():
                     else:
                         row.append(ud)
 
+                try:
+                    row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+                    row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+                except (KeyError, TypeError):
+                    row.append(component['componentVersionName'])
+                    row.append(component['releasedOn'])
+
                 row_list.append(row.copy())
                 row = row[0:3]
 
@@ -330,7 +384,9 @@ def genreport():
             writer.writerow(row)
     f.close()
 
+
 csv_list = []
+
 
 def concat():
     curdir = os.getcwd()

@@ -1,13 +1,13 @@
-from typing import Set, Any
 import argparse
-from blackduck.HubRestApi import HubInstance
-import time
-import shutil
-import os
-import glob
-import pandas
-import json
 import csv
+import glob
+import os
+import shutil
+import time
+
+import pandas
+
+from blackduck.HubRestApi import HubInstance
 
 parser = argparse.ArgumentParser("A program to create reports for a given project-version and all of its subprojects")
 parser.add_argument("project_name")
@@ -45,7 +45,7 @@ def doRefresh(dir_name):
 
 
 def checkdirs():
-    if os.path.isdir('./temp') == False:
+    if not os.path.isdir('./temp'):
         os.makedirs('./temp')
         print('made temp directory')
     elif len(os.listdir('./temp')) != 0:
@@ -53,7 +53,7 @@ def checkdirs():
     else:
         print('temp directory already exists')
 
-    if os.path.isdir('./results') == False:
+    if not os.path.isdir('./results'):
         os.makedirs('./results')
         print('made results directory')
     elif args.refresh and len(os.listdir('./results')) != 0:
@@ -86,7 +86,6 @@ def get_component_URL_and_description(bomComponent):
     components_info = []
     component_url = bomComponent['component']
     response = hub.execute_get(component_url)
-    component_details = None
     if response.status_code == 200:
         component_details = response.json()
         components_info.append(component_details.get("url"))
@@ -104,7 +103,6 @@ def get_license_names_and_family(bom_component):
     else:
         license_url = bom_component['licenses'][0]['license']
         response = hub.execute_get(license_url)
-        license_details = None
     if response.status_code == 200:
         license_details = response.json()
         result.append(license_details.get("name"))
@@ -166,6 +164,61 @@ def get_header():
             "Download URL", "Component Description", "Latest Version Available", "Latest Version Release Date"]
 
 
+def ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
+                               component_remediating_info, comp_version_url, url_and_des, component):
+    rl = row_list
+    r = row
+
+    for vuln in component_vuln_information:
+        v_name_key = vuln['vulnerabilityName']
+        r.append(v_name_key)
+        r.append(vuln['severity'])
+        r.append(vuln['baseScore'])
+        r.append(vuln['remediationStatus'])
+        r.append(vuln['vulnerabilityPublishedDate'])
+        r.append(vuln['vulnerabilityUpdatedDate'])
+        r.append(vuln['remediationCreatedAt'])
+
+        try:
+            v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
+            r.append("".join(v_solution))
+        except KeyError:
+            r.append("None")
+            # print("Solution not available for - {}".format(v_name_key))
+
+        try:
+            r.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
+        except KeyError:
+            r.append("None")
+            # print("Solution Date not available for - {}".format(v_name_key))
+
+        try:
+            r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
+        except KeyError:
+            r.append("None")
+            # print("No remediation comment for - {}".format(v_name_key))
+
+        r.append(license_names_and_family[0])
+        r.append(license_names_and_family[1])
+
+        for ud in url_and_des:
+            if not ud:
+                r.append("None")
+            else:
+                r.append(ud)
+
+        try:
+            r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+            r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+        except (KeyError, TypeError):
+            r.append(component['componentVersionName'])
+            r.append(component['releasedOn'])
+
+        rl.append(r.copy())
+        r = r[0:3]
+    return rl
+
+
 subprojects = list()
 
 
@@ -199,58 +252,10 @@ def generate_child_reports():
         row.append(component['componentName'])
         row.append(component['componentVersionName'])
 
-    row_list = []
-    if len(component_vuln_information) <= 0:
-        for i in range(10):
-            row.append("None")
-
-        row.append(license_names_and_family[0])
-        row.append(license_names_and_family[1])
-
-        for ud in url_and_des:
-            if not ud:
+        row_list = []
+        if len(component_vuln_information) <= 0:
+            for i in range(10):
                 row.append("None")
-            else:
-                row.append(ud)
-
-        try:
-            row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-            row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
-        except (KeyError, TypeError):
-            row.append(component['componentVersionName'])
-            row.append(component['releasedOn'])
-
-        row_list.append(row.copy())
-
-    elif len(component_vuln_information) > 0:
-        for vuln in component_vuln_information:
-            v_name_key = vuln['vulnerabilityName']
-            row.append(v_name_key)
-            row.append(vuln['severity'])
-            row.append(vuln['baseScore'])
-            row.append(vuln['remediationStatus'])
-            row.append(vuln['vulnerabilityPublishedDate'])
-            row.append(vuln['vulnerabilityUpdatedDate'])
-            row.append(vuln['remediationCreatedAt'])
-
-            try:
-                v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
-                row.append("".join(v_solution))
-            except KeyError:
-                row.append("None")
-                # print("Solution not available for - {}".format(v_name_key))
-
-            try:
-                row.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
-            except KeyError:
-                row.append("None")
-                # print("Solution Date not available for - {}".format(v_name_key))
-
-            try:
-                row.append(vuln_component_remediation_info.get(v_name_key)['comment'])
-            except KeyError:
-                row.append("None")
-                # print("No remediation comment for - {}".format(v_name_key))
 
             row.append(license_names_and_family[0])
             row.append(license_names_and_family[1])
@@ -269,10 +274,13 @@ def generate_child_reports():
                 row.append(component['releasedOn'])
 
             row_list.append(row.copy())
-            row = row[0:3]
 
-    for row in row_list:
-        writer.writerow(row)
+        elif len(component_vuln_information) > 0:
+            row_list = ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
+                                                  component_remediating_info, comp_version_url, url_and_des, component)
+
+        for row in row_list:
+            writer.writerow(row)
     f.close()
 
 
@@ -330,55 +338,8 @@ def genreport():
             row_list.append(row.copy())
 
         elif len(component_vuln_information) > 0:
-            for vuln in component_vuln_information:
-                v_name_key = vuln['vulnerabilityName']
-                if v_name_key == "BDSA-2014-0001":
-                    print(v_name_key)
-                row.append(v_name_key)
-                row.append(vuln['severity'])
-                row.append(vuln['baseScore'])
-                row.append(vuln['remediationStatus'])
-                row.append(vuln['vulnerabilityPublishedDate'])
-                row.append(vuln['vulnerabilityUpdatedDate'])
-                row.append(vuln['remediationCreatedAt'])
-
-                try:
-                    v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
-                    row.append("".join(v_solution))
-                except KeyError:
-                    row.append("None")
-                    # print("Solution not available for - {}".format(v_name_key))
-
-                try:
-                    row.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
-                except KeyError:
-                    row.append("None")
-                    # print("Solution Date not available for - {}".format(v_name_key))
-
-                try:
-                    row.append(vuln_component_remediation_info.get(v_name_key)['comment'])
-                except KeyError:
-                    row.append("None")
-                    # print("No remediation comment for - {}".format(v_name_key))
-
-                row.append(license_names_and_family[0])
-                row.append(license_names_and_family[1])
-
-                for ud in url_and_des:
-                    if not ud:
-                        row.append("None")
-                    else:
-                        row.append(ud)
-
-                try:
-                    row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-                    row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
-                except (KeyError, TypeError):
-                    row.append(component['componentVersionName'])
-                    row.append(component['releasedOn'])
-
-                row_list.append(row.copy())
-                row = row[0:3]
+            row_list = ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
+                                                  component_remediating_info, comp_version_url, url_and_des, component)
 
         for row in row_list:
             writer.writerow(row)

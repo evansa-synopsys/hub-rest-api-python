@@ -12,14 +12,8 @@ from blackduck.HubRestApi import HubInstance
 parser = argparse.ArgumentParser("A program to create reports for a given project-version and all of its subprojects")
 parser.add_argument("project_name")
 parser.add_argument("version_name")
-parser.add_argument("-z", "--zip_file_name", default="reports.zip")
 parser.add_argument('-r', '--refresh', action='store_true',
                     help='delete existing reports in the results directory and regenerate')
-
-parser.add_argument('-t', '--tries', default=4, type=int,
-                    help="How many times to retry downloading the report, i.e. wait for the report to be generated")
-parser.add_argument('-s', '--sleep_time', default=5, type=int,
-                    help="The amount of time to sleep in-between (re-)tries to download the report")
 
 args = parser.parse_args()
 hub = HubInstance()

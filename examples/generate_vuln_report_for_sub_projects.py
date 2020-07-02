@@ -18,11 +18,6 @@ parser.add_argument('-r', '--refresh', action='store_true',
 args = parser.parse_args()
 hub = HubInstance()
 
-# build up the datasets
-projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
-components = hub.get_version_components(projversion)
-vulnerable_components = hub.get_vulnerable_bom_components(projversion)
-
 projname = args.project_name
 timestamp = time.strftime('%m_%d_%Y_%H_%M')
 file_out = (projname + '_' + "Consolidated_src_report-" + timestamp)
@@ -106,7 +101,7 @@ def get_license_names_and_family(bom_component):
         return result
 
 
-def get_component_vuln_information(bom_component):
+def get_component_vuln_information(bom_component, vulnerable_components):
     vulnerable_bom_components_info = vulnerable_components['items']
     result = list()
     for info in vulnerable_bom_components_info:
@@ -119,7 +114,7 @@ def get_component_vuln_information(bom_component):
 
 
 # return a dictionary with remediation details from a call to /REMEDIATION endpoint
-def build_component_remediation_data():
+def build_component_remediation_data(vulnerable_components):
     remediation_data = dict()
     for info in vulnerable_components['items']:
         response = hub.execute_get(info['_meta']['href'])
@@ -131,9 +126,6 @@ def build_component_remediation_data():
             remediation_data.update(rdict)
             continue
     return remediation_data
-
-
-vuln_component_remediation_info = build_component_remediation_data()
 
 
 # return a dictionary with the version url mapped to the latestAfterCurrent name and date
@@ -151,17 +143,72 @@ def get_component_remediating_data(comp_version_name_url):
 
 
 def get_header():
-    return ["Package Path and Type", "Component Name", "Component Version Name", "Vulnerability Name", "Severity",
+    return ["Project Name", "Project Version", "Package Path and Type", "Component Name", "Component Version Name",
+            "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
             "Remediation Created At", "Solution", "Solution Date", "Remediation Comment", "License Names",
             "License Family",
             "Download URL", "Component Description", "Latest Version Available", "Latest Version Release Date"]
 
 
-def ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
-                               component_remediating_info, comp_version_url, url_and_des, component):
+def append_component_info(component, package_type, url_and_des, license_names_and_family, comp_version_url,
+                          component_remediating_info, project_name, project_version):
+    row = []
+    if project_name:
+        row.append(project_name)
+    if project_version:
+        row.append(project_version)
+    if package_type is not None:
+        row.append(str(package_type))
+    else:
+        row.append("None")
+
+    row.append(component['componentName'])
+    row.append(component['componentVersionName'])
+
+    component_row_list = []
+    for i in range(10):
+        row.append("None")
+
+    row.append(license_names_and_family[0])
+    row.append(license_names_and_family[1])
+
+    for ud in url_and_des:
+        if not ud:
+            row.append("None")
+        else:
+            row.append(ud)
+
+    try:
+        row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
+        row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+    except (KeyError, TypeError):
+        row.append(component['componentVersionName'])
+        row.append(component['releasedOn'])
+
+    component_row_list.append(row.copy())
+
+    return component_row_list
+
+
+def append_vulnerabilities(package_type, component_vuln_information, row_list, row, license_names_and_family,
+                           component_remediating_info, comp_version_url, url_and_des, component,
+                           vuln_component_remediation_info, project_name, project_version):
     rl = row_list
     r = row
+
+    if project_name:
+        r.append(project_name)
+    if project_version:
+        r.append(project_version)
+
+    if package_type is not None:
+        r.append(str(package_type))
+    else:
+        r.append("None")
+
+    r.append(component['componentName'])
+    r.append(component['componentVersionName'])
 
     for vuln in component_vuln_information:
         v_name_key = vuln['vulnerabilityName']
@@ -209,14 +256,20 @@ def ext_append_vulnerabilities(component_vuln_information, row_list, row, licens
             r.append(component['releasedOn'])
 
         rl.append(r.copy())
-        r = r[0:3]
+        r = r[0:5]
     return rl
 
 
 subprojects = list()
 
 
-def generate_child_reports():
+def generate_child_reports(component):
+    child_project_name = component['componentName']
+    child_project_version_name = component['componentVersionName']
+    child_project_version = hub.get_project_version_by_name(child_project_name, child_project_version_name)
+    child_project_components = hub.get_version_components(child_project_version)
+    child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
+    child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M')
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
     child_file_out = (child_file_out + ".csv")
@@ -225,11 +278,11 @@ def generate_child_reports():
     os.chdir(curdir)
     f = open(child_file_out, 'a', newline='')
     writer = csv.writer(f)
-    for component in subprojects:
+    for component in child_project_components['items']:
         package_type = getCompositePathContext(component)
         url_and_des = get_component_URL_and_description(component)
         license_names_and_family = get_license_names_and_family(component)
-        component_vuln_information = get_component_vuln_information(component)
+        component_vuln_information = get_component_vuln_information(component, child_vulnerable_components)
         comp_version_url = component.get('componentVersion')
         component_remediating_info = get_component_remediating_data(comp_version_url)
         row = []
@@ -238,60 +291,44 @@ def generate_child_reports():
             writer.writerow(header)
             count += 1
 
-        if package_type is not None:
-            row.append(str(package_type))
-        else:
-            row.append("None")
-
-        row.append(component['componentName'])
-        row.append(component['componentVersionName'])
-
         row_list = []
         if len(component_vuln_information) <= 0:
-            for i in range(10):
-                row.append("None")
-
-            row.append(license_names_and_family[0])
-            row.append(license_names_and_family[1])
-
-            for ud in url_and_des:
-                if not ud:
-                    row.append("None")
-                else:
-                    row.append(ud)
-
-            try:
-                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
-            except (KeyError, TypeError):
-                row.append(component['componentVersionName'])
-                row.append(component['releasedOn'])
-
-            row_list.append(row.copy())
-
+            row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
+                                             comp_version_url, component_remediating_info, child_project_name,
+                                             child_project_version_name)
         elif len(component_vuln_information) > 0:
-            row_list = ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
-                                                  component_remediating_info, comp_version_url, url_and_des, component)
-
+            row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
+                                              license_names_and_family,
+                                              component_remediating_info, comp_version_url, url_and_des, component,
+                                              child_vuln_component_remediation_info, child_project_name,
+                                              child_project_version_name)
         for row in row_list:
             writer.writerow(row)
     f.close()
 
 
 def genreport():
-    count = 0
+    # build up the datasets
+    projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
+    components = hub.get_version_components(projversion)
+    vulnerable_components = hub.get_vulnerable_bom_components(projversion)
+    vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
+    project_name = args.project_name
+    project_version = args.version_name
     curdir = os.getcwd()
     tempdir = os.path.join(curdir, 'temp')
     os.chdir(tempdir)
     f = open(file_out, 'a', newline='')
     writer = csv.writer(f)
+    count = 0
     for component in components['items']:
         if len(component['activityData']) == 0:
-            subprojects.append(component)
+            generate_child_reports(component)
+            continue
         package_type = getCompositePathContext(component)
         url_and_des = get_component_URL_and_description(component)
         license_names_and_family = get_license_names_and_family(component)
-        component_vuln_information = get_component_vuln_information(component)
+        component_vuln_information = get_component_vuln_information(component, vulnerable_components)
         comp_version_url = component.get('componentVersion')
         component_remediating_info = get_component_remediating_data(comp_version_url)
         row = []
@@ -299,41 +336,16 @@ def genreport():
             header = get_header()
             writer.writerow(header)
             count += 1
-
-        if package_type is not None:
-            row.append(str(package_type))
-        else:
-            row.append("None")
-
-        row.append(component['componentName'])
-        row.append(component['componentVersionName'])
-
         row_list = []
         if len(component_vuln_information) <= 0:
-            for i in range(10):
-                row.append("None")
-
-            row.append(license_names_and_family[0])
-            row.append(license_names_and_family[1])
-
-            for ud in url_and_des:
-                if not ud:
-                    row.append("None")
-                else:
-                    row.append(ud)
-
-            try:
-                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-                row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
-            except (KeyError, TypeError):
-                row.append(component['componentVersionName'])
-                row.append(component['releasedOn'])
-
-            row_list.append(row.copy())
-
+            row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
+                                             comp_version_url, component_remediating_info, project_name,
+                                             project_version)
         elif len(component_vuln_information) > 0:
-            row_list = ext_append_vulnerabilities(component_vuln_information, row_list, row, license_names_and_family,
-                                                  component_remediating_info, comp_version_url, url_and_des, component)
+            row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
+                                              license_names_and_family,
+                                              component_remediating_info, comp_version_url, url_and_des, component,
+                                              vuln_component_remediation_info, project_name, project_version)
 
         for row in row_list:
             writer.writerow(row)
@@ -346,9 +358,10 @@ csv_list = []
 def concat():
     curdir = os.getcwd()
     os.chdir(curdir)
-    for csv in glob.iglob('*.csv'):
+    for csv in glob.glob('*.csv'):
         csv_list.append(csv)
-    consolidated = pandas.concat([pandas.read_csv(csv) for csv in csv_list])
+    all_csvs = (pandas.read_csv(csv, sep=',') for csv in csv_list)
+    consolidated = pandas.concat(all_csvs, ignore_index=True)
     consolidated.to_csv(file_out, index=False, encoding="utf-8")
     shutil.move(file_out, '../results/')
     shutil.rmtree('../temp', ignore_errors=True)
@@ -357,7 +370,6 @@ def concat():
 def main():
     checkdirs()
     genreport()
-    generate_child_reports()
     concat()
 
 

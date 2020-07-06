@@ -318,7 +318,7 @@ def genreport():
     curdir = os.getcwd()
     tempdir = os.path.join(curdir, 'temp')
     os.chdir(tempdir)
-    f = open(file_out, 'a', newline='')
+    f = open(file_out, 'w', newline='')
     writer = csv.writer(f)
     count = 0
     for component in components['items']:

@@ -29,7 +29,7 @@ def doRefresh(dir_name):
     tempDir = os.path.join(rootDir, dir_name)
     print("tempDir=%s" % tempDir)
     for fileName in os.listdir(tempDir):
-        print("Removing stale directory %s" % fileName)
+        print("Removing stale files %s" % fileName)
         os.remove(os.path.join(tempDir, fileName))
 
 
@@ -100,16 +100,12 @@ def get_license_names_and_family(bom_component):
     else:
         return result
 
-
+# search the list of vulnerable components for a matching component version url, return a list of vulnerabilities with
+# remediation details for that bom component
 def get_component_vuln_information(bom_component, vulnerable_components):
     vulnerable_bom_components_info = vulnerable_components['items']
-    result = list()
-    for info in vulnerable_bom_components_info:
-        # print(info)
-        if info['componentName'] == bom_component.get('componentName') and info[
-            'componentVersionName'] == bom_component.get('componentVersionName'):
-            result.append(info.get('vulnerabilityWithRemediation'))
-            continue
+    bc_component_version = bom_component.get('componentVersion')
+    result = [info for info in vulnerable_bom_components_info if info['componentVersion'] == bc_component_version]
     return result
 
 
@@ -211,14 +207,14 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
     r.append(component['componentVersionName'])
 
     for vuln in component_vuln_information:
-        v_name_key = vuln['vulnerabilityName']
+        v_name_key = vuln['vulnerabilityWithRemediation']['vulnerabilityName']
         r.append(v_name_key)
-        r.append(vuln['severity'])
-        r.append(vuln['baseScore'])
-        r.append(vuln['remediationStatus'])
-        r.append(vuln['vulnerabilityPublishedDate'])
-        r.append(vuln['vulnerabilityUpdatedDate'])
-        r.append(vuln['remediationCreatedAt'])
+        r.append(vuln['vulnerabilityWithRemediation']['severity'])
+        r.append(vuln['vulnerabilityWithRemediation']['baseScore'])
+        r.append(vuln['vulnerabilityWithRemediation']['remediationStatus'])
+        r.append(vuln['vulnerabilityWithRemediation']['vulnerabilityPublishedDate'])
+        r.append(vuln['vulnerabilityWithRemediation']['vulnerabilityUpdatedDate'])
+        r.append(vuln['vulnerabilityWithRemediation']['remediationCreatedAt'])
 
         try:
             v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
@@ -261,8 +257,6 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
 
 subprojects = list()
-
-
 def generate_child_reports(component):
     child_project_name = component['componentName']
     child_project_version_name = component['componentVersionName']
@@ -273,37 +267,37 @@ def generate_child_reports(component):
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M')
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
     child_file_out = (child_file_out + ".csv")
-    count = 0
     curdir = os.getcwd()
     os.chdir(curdir)
-    f = open(child_file_out, 'a', newline='')
-    writer = csv.writer(f)
-    for component in child_project_components['items']:
-        package_type = getCompositePathContext(component)
-        url_and_des = get_component_URL_and_description(component)
-        license_names_and_family = get_license_names_and_family(component)
-        component_vuln_information = get_component_vuln_information(component, child_vulnerable_components)
-        comp_version_url = component.get('componentVersion')
-        component_remediating_info = get_component_remediating_data(comp_version_url)
-        row = []
-        if count == 0:
-            header = get_header()
-            writer.writerow(header)
-            count += 1
+    with open(child_file_out, 'a', newline='') as f:
+        first_child_file = True
+        writer = csv.writer(f)
+        for component in child_project_components['items']:
+            package_type = getCompositePathContext(component)
+            url_and_des = get_component_URL_and_description(component)
+            license_names_and_family = get_license_names_and_family(component)
+            component_vuln_information = get_component_vuln_information(component, child_vulnerable_components)
+            comp_version_url = component.get('componentVersion')
+            component_remediating_info = get_component_remediating_data(comp_version_url)
+            row = []
+            if first_child_file:
+                header = get_header()
+                writer.writerow(header)
+                first_child_file = False
 
-        row_list = []
-        if len(component_vuln_information) <= 0:
-            row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
-                                             comp_version_url, component_remediating_info, child_project_name,
-                                             child_project_version_name)
-        elif len(component_vuln_information) > 0:
-            row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
-                                              license_names_and_family,
-                                              component_remediating_info, comp_version_url, url_and_des, component,
-                                              child_vuln_component_remediation_info, child_project_name,
-                                              child_project_version_name)
-        for row in row_list:
-            writer.writerow(row)
+            row_list = []
+            if len(component_vuln_information) <= 0:
+                row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
+                                                 comp_version_url, component_remediating_info, child_project_name,
+                                                 child_project_version_name)
+            elif len(component_vuln_information) > 0:
+                row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
+                                                  license_names_and_family,
+                                                  component_remediating_info, comp_version_url, url_and_des, component,
+                                                  child_vuln_component_remediation_info, child_project_name,
+                                                  child_project_version_name)
+            for row in row_list:
+                writer.writerow(row)
     f.close()
 
 
@@ -318,37 +312,37 @@ def genreport():
     curdir = os.getcwd()
     tempdir = os.path.join(curdir, 'temp')
     os.chdir(tempdir)
-    f = open(file_out, 'w', newline='')
-    writer = csv.writer(f)
-    count = 0
-    for component in components['items']:
-        if len(component['activityData']) == 0:
-            generate_child_reports(component)
-            continue
-        package_type = getCompositePathContext(component)
-        url_and_des = get_component_URL_and_description(component)
-        license_names_and_family = get_license_names_and_family(component)
-        component_vuln_information = get_component_vuln_information(component, vulnerable_components)
-        comp_version_url = component.get('componentVersion')
-        component_remediating_info = get_component_remediating_data(comp_version_url)
-        row = []
-        if count == 0:
-            header = get_header()
-            writer.writerow(header)
-            count += 1
-        row_list = []
-        if len(component_vuln_information) <= 0:
-            row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
-                                             comp_version_url, component_remediating_info, project_name,
-                                             project_version)
-        elif len(component_vuln_information) > 0:
-            row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
-                                              license_names_and_family,
-                                              component_remediating_info, comp_version_url, url_and_des, component,
-                                              vuln_component_remediation_info, project_name, project_version)
+    with open(file_out, 'w', newline='') as f:
+        writer = csv.writer(f)
+        first_file = True
+        for component in components['items']:
+            if len(component['activityData']) == 0:
+                generate_child_reports(component)
+                continue
+            package_type = getCompositePathContext(component)
+            url_and_des = get_component_URL_and_description(component)
+            license_names_and_family = get_license_names_and_family(component)
+            component_vuln_information = get_component_vuln_information(component, vulnerable_components)
+            comp_version_url = component.get('componentVersion')
+            component_remediating_info = get_component_remediating_data(comp_version_url)
+            row = []
+            if first_file:
+                header = get_header()
+                writer.writerow(header)
+                first_file = False
+            row_list = []
+            if len(component_vuln_information) <= 0:
+                row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
+                                                 comp_version_url, component_remediating_info, project_name,
+                                                 project_version)
+            elif len(component_vuln_information) > 0:
+                row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
+                                                  license_names_and_family,
+                                                  component_remediating_info, comp_version_url, url_and_des, component,
+                                                  vuln_component_remediation_info, project_name, project_version)
 
-        for row in row_list:
-            writer.writerow(row)
+            for row in row_list:
+                writer.writerow(row)
     f.close()
 
 

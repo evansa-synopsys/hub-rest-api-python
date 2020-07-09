@@ -100,12 +100,14 @@ def get_license_names_and_family(bom_component):
     else:
         return result
 
+
 # search the list of vulnerable components for a matching component version url, return a list of vulnerabilities with
 # remediation details for that bom component
-def get_component_vuln_information(bom_component, vulnerable_components):
-    vulnerable_bom_components_info = vulnerable_components['items']
-    bc_component_version = bom_component.get('componentVersion')
-    result = [info for info in vulnerable_bom_components_info if info['componentVersion'] == bc_component_version]
+def get_component_vuln_information(bom_component):
+    response = hub.execute_get(
+        "{}{}".format(bom_component['_meta']['links'][3].get('href'), hub.get_limit_paramstring(10000)))
+    if response.status_code == 200:
+        result = response.json().get('items')
     return result
 
 
@@ -207,14 +209,30 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
     r.append(component['componentVersionName'])
 
     for vuln in component_vuln_information:
-        v_name_key = vuln['vulnerabilityWithRemediation']['vulnerabilityName']
+        v_name_key = vuln['name']
         r.append(v_name_key)
-        r.append(vuln['vulnerabilityWithRemediation']['severity'])
-        r.append(vuln['vulnerabilityWithRemediation']['baseScore'])
-        r.append(vuln['vulnerabilityWithRemediation']['remediationStatus'])
-        r.append(vuln['vulnerabilityWithRemediation']['vulnerabilityPublishedDate'])
-        r.append(vuln['vulnerabilityWithRemediation']['vulnerabilityUpdatedDate'])
-        r.append(vuln['vulnerabilityWithRemediation']['remediationCreatedAt'])
+        r.append(vuln['severity'])
+
+        # prioritizes cvss3 over cvss2
+        try:
+            r.append(vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore'))
+        except KeyError:
+            r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
+        except KeyError:
+            r.append("None")
+
+        try:
+            r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
+        except KeyError:
+            r.append("None")
+
+        r.append(vuln['publishedDate'])
+        r.append(vuln['updatedDate'])
+
+        try:
+            r.append(vuln_component_remediation_info.get(v_name_key)['createdAt'])
+        except KeyError:
+            r.append("None")
 
         try:
             v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
@@ -264,7 +282,7 @@ def generate_child_reports(component):
     child_project_components = hub.get_version_components(child_project_version)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
     child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
-    child_timestamp = time.strftime('%m_%d_%Y_%H_%M')
+    child_timestamp = time.strftime('%m_%d_%Y_%H_%M_%S')
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
     child_file_out = (child_file_out + ".csv")
     curdir = os.getcwd()
@@ -276,7 +294,7 @@ def generate_child_reports(component):
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            component_vuln_information = get_component_vuln_information(component, child_vulnerable_components)
+            component_vuln_information = get_component_vuln_information(component)
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
             row = []
@@ -322,7 +340,7 @@ def genreport():
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            component_vuln_information = get_component_vuln_information(component, vulnerable_components)
+            component_vuln_information = get_component_vuln_information(component)
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
             row = []
@@ -352,11 +370,13 @@ csv_list = []
 def concat():
     curdir = os.getcwd()
     os.chdir(curdir)
-    for csv in glob.glob('*.csv'):
-        csv_list.append(csv)
-    all_csvs = (pandas.read_csv(csv, sep=',') for csv in csv_list)
-    consolidated = pandas.concat(all_csvs, ignore_index=True)
-    consolidated.to_csv(file_out, index=False, encoding="utf-8")
+    all_csvs = glob.glob(os.path.join(curdir, '*.csv'))
+    all_data_frames = []
+    for csv in all_csvs:
+        data_frame = pandas.read_csv(csv, index_col=None)
+        all_data_frames.append(data_frame)
+    data_frame_concat = pandas.concat(all_data_frames, axis=0, ignore_index=True)
+    data_frame_concat.to_csv(file_out, index=False)
     shutil.move(file_out, '../results/')
     shutil.rmtree('../temp', ignore_errors=True)
 

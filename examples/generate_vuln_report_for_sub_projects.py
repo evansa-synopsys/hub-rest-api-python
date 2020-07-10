@@ -22,8 +22,8 @@ projname = args.project_name
 timestamp = time.strftime('%m_%d_%Y_%H_%M')
 file_out = (projname + '_' + "Consolidated_src_report-" + timestamp)
 file_out = (file_out + ".csv")
-rootDir = os.path.dirname(os.path.realpath(__file__))
-
+rootDir = os.getcwd()
+# print ("root dir=%s" % rootDir)
 
 def doRefresh(dir_name):
     tempDir = os.path.join(rootDir, dir_name)
@@ -34,6 +34,7 @@ def doRefresh(dir_name):
 
 
 def checkdirs():
+    os.chdir(rootDir)
     if not os.path.isdir('./temp'):
         os.makedirs('./temp')
         print('made temp directory')
@@ -50,6 +51,9 @@ def checkdirs():
         doRefresh('results')
     else:
         print('results directory already exists')
+
+def clean_up_date(date_string):
+    return date_string.split('T')[0]
 
 
 def getCompositePathContext(comp):
@@ -159,30 +163,30 @@ def append_component_info(component, package_type, url_and_des, license_names_an
     if package_type is not None:
         row.append(str(package_type))
     else:
-        row.append("None")
+        row.append("")
 
     row.append(component['componentName'])
     row.append(component['componentVersionName'])
 
     component_row_list = []
     for i in range(10):
-        row.append("None")
+        row.append("")
 
     row.append(license_names_and_family[0])
     row.append(license_names_and_family[1])
 
     for ud in url_and_des:
         if not ud:
-            row.append("None")
+            row.append("")
         else:
             row.append(ud)
 
     try:
         row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-        row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+        row.append(clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
     except (KeyError, TypeError):
         row.append(component['componentVersionName'])
-        row.append(component['releasedOn'])
+        row.append(clean_up_date(component['releasedOn']))
 
     component_row_list.append(row.copy())
 
@@ -203,7 +207,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
     if package_type is not None:
         r.append(str(package_type))
     else:
-        r.append("None")
+        r.append("")
 
     r.append(component['componentName'])
     r.append(component['componentVersionName'])
@@ -219,38 +223,38 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         except KeyError:
             r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
         except KeyError:
-            r.append("None")
+            r.append("")
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
         except KeyError:
-            r.append("None")
+            r.append("")
 
-        r.append(vuln['publishedDate'])
-        r.append(vuln['updatedDate'])
+        r.append(clean_up_date(vuln['publishedDate']))
+        r.append(clean_up_date(vuln['updatedDate']))
 
         try:
-            r.append(vuln_component_remediation_info.get(v_name_key)['createdAt'])
+            r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt']))
         except KeyError:
-            r.append("None")
+            r.append("")
 
         try:
             v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
             r.append("".join(v_solution))
         except KeyError:
-            r.append("None")
+            r.append("")
             # print("Solution not available for - {}".format(v_name_key))
 
         try:
-            r.append(vuln_component_remediation_info.get(v_name_key)['solutionDate'])
-        except KeyError:
-            r.append("None")
+            r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['solutionDate']))
+        except (KeyError, IndexError):
+            r.append("")
             # print("Solution Date not available for - {}".format(v_name_key))
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
         except KeyError:
-            r.append("None")
+            r.append("")
             # print("No remediation comment for - {}".format(v_name_key))
 
         r.append(license_names_and_family[0])
@@ -258,16 +262,16 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         for ud in url_and_des:
             if not ud:
-                r.append("None")
+                r.append("")
             else:
                 r.append(ud)
 
         try:
             r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-            r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn'))
+            r.append(clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
         except (KeyError, TypeError):
             r.append(component['componentVersionName'])
-            r.append(component['releasedOn'])
+            r.append(clean_up_date(component['releasedOn']))
 
         rl.append(r.copy())
         r = r[0:5]
@@ -376,7 +380,7 @@ def concat():
         data_frame = pandas.read_csv(csv, index_col=None)
         all_data_frames.append(data_frame)
     data_frame_concat = pandas.concat(all_data_frames, axis=0, ignore_index=True)
-    data_frame_concat.to_csv(file_out, index=False)
+    data_frame_concat.to_csv(file_out, index=False, quoting=1)
     shutil.move(file_out, '../results/')
     shutil.rmtree('../temp', ignore_errors=True)
 

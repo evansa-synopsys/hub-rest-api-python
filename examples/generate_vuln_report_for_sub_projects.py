@@ -225,7 +225,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
             else:
                 r.append("")
-        except TypeError:
+        except (KeyError,TypeError):
             r.append("")
 
         try:

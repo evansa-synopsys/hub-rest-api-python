@@ -63,19 +63,18 @@ def getCompositePathContext(comp):
     try:
         matchedFilesURL = comp['_meta']['links'][4]['href']
     except TypeError:
-        return []
+        return ["", ""]
     response = hub.execute_get(matchedFilesURL)
     mfJson = None
     if response.status_code == 200:
         mfJson = response.json()
     result = []
     if mfJson['totalCount'] > 0:
-        tempItems = mfJson['items']
-        for index in range(len(tempItems)):
-            result.append(tempItems[index]['filePath']['compositePathContext'])
+        result.append(mfJson['items'][0]['filePath']['path'])
+        result.append(mfJson['items'][0]['filePath']['fileName'])
         return result
     else:
-        return []
+        return ["", ""]
 
 
 def get_component_URL_and_description(bomComponent):
@@ -148,7 +147,7 @@ def get_component_remediating_data(comp_version_name_url):
 
 
 def get_header():
-    return ["Project Name", "Project Version", "Package Path and Type", "Component Name", "Component Version Name",
+    return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name", "Component Version Name",
             "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
             "Remediation Created At", "Solution", "Solution Date", "Remediation Comment", "License Names",
@@ -164,8 +163,10 @@ def append_component_info(component, package_type, url_and_des, license_names_an
     if project_version:
         row.append(project_version)
     if package_type is not None:
-        row.append(str(package_type))
+        row.append(package_type[0])
+        row.append(package_type[1])
     else:
+        row.append("")
         row.append("")
 
     row.append(component['componentName'])
@@ -209,9 +210,11 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         r.append(project_version)
 
     if package_type is not None:
-        r.append(str(package_type))
+        row.append(package_type[0])
+        row.append(package_type[1])
     else:
-        r.append("")
+        row.append("")
+        row.append("")
 
     r.append(component['componentName'])
     r.append(component['componentVersionName'])
@@ -282,7 +285,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append(clean_up_date(component['releasedOn']))
 
         rl.append(r.copy())
-        r = r[0:5]
+        r = r[0:6]
     return rl
 
 

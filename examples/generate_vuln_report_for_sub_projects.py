@@ -23,6 +23,8 @@ timestamp = time.strftime('%m_%d_%Y_%H_%M')
 file_out = (projname + '_' + "Consolidated_src_report-" + timestamp)
 file_out = (file_out + ".csv")
 rootDir = os.getcwd()
+
+
 # print ("root dir=%s" % rootDir)
 
 def doRefresh(dir_name):
@@ -51,6 +53,7 @@ def checkdirs():
         doRefresh('results')
     else:
         print('results directory already exists')
+
 
 def clean_up_date(date_string):
     return date_string.split('T')[0]
@@ -183,7 +186,8 @@ def append_component_info(component, package_type, url_and_des, license_names_an
 
     try:
         row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-        row.append(clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
+        row.append(
+            clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
     except (KeyError, TypeError):
         row.append(component['componentVersionName'])
         row.append(clean_up_date(component['releasedOn']))
@@ -225,12 +229,12 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
             else:
                 r.append("")
-        except (KeyError,TypeError):
+        except (KeyError, TypeError):
             r.append("")
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
-        except KeyError:
+        except (KeyError, TypeError):
             r.append("")
 
         r.append(clean_up_date(vuln['publishedDate']))
@@ -238,13 +242,13 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         try:
             r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt']))
-        except KeyError:
+        except (KeyError, TypeError):
             r.append("")
 
         try:
             v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
             r.append("".join(v_solution))
-        except KeyError:
+        except (KeyError, TypeError):
             r.append("")
             # print("Solution not available for - {}".format(v_name_key))
 
@@ -256,7 +260,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
-        except KeyError:
+        except (KeyError, TypeError):
             r.append("")
             # print("No remediation comment for - {}".format(v_name_key))
 
@@ -271,7 +275,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         try:
             r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-            r.append(clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
+            r.append(
+                clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
         except (KeyError, TypeError):
             r.append(component['componentVersionName'])
             r.append(clean_up_date(component['releasedOn']))
@@ -282,6 +287,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
 
 subprojects = list()
+
+
 def generate_child_reports(component):
     child_project_name = component['componentName']
     child_project_version_name = component['componentVersionName']

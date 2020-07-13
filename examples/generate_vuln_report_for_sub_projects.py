@@ -219,10 +219,13 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         # prioritizes cvss3 over cvss2
         try:
-            r.append(vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore'))
-        except(KeyError, TypeError):
-            r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
-        except(KeyError, TypeError):
+            if vuln_component_remediation_info.get(v_name_key)['cvss3']:
+                r.append(vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore'))
+            elif vuln_component_remediation_info.get(v_name_key)['cvss2']:
+                r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
+            else:
+                r.append("")
+        except TypeError:
             r.append("")
 
         try:

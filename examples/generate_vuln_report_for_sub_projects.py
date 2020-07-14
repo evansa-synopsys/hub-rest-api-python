@@ -152,7 +152,7 @@ def get_header():
             "Component Version Name",
             "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
-            "Remediation Created At", "Solution", "Solution Date", "Remediation Comment", "License Names",
+            "Remediation Created At", "Fixed In", "Fix Available On", "Remediation Comment", "License Names",
             "License Family",
             "Download URL", "Component Description", "Latest Version Available", "Latest Version Release Date"]
 
@@ -251,14 +251,15 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
 
         try:
-            v_solution = vuln_component_remediation_info.get(v_name_key)['solution'].strip().splitlines()
-            r.append("".join(v_solution))
+            fixes_prev_vulnerabilities = component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+            r.append(fixes_prev_vulnerabilities)
         except (KeyError, TypeError):
             r.append("")
             # print("Solution not available for - {}".format(v_name_key))
 
         try:
-            r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['solutionDate']))
+            fpv_released_on_date = clean_up_date(component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
+            r.append(fpv_released_on_date)
         except (KeyError, IndexError):
             r.append("")
             # print("Solution Date not available for - {}".format(v_name_key))

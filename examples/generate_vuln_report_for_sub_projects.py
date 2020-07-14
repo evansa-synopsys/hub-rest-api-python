@@ -62,8 +62,7 @@ def clean_up_date(date_string):
 def getCompositePathContext(comp):
     try:
         matchedFilesURL = comp['_meta']['links'][4]['href']
-    except TypeError as e:
-        print(e)
+    except TypeError:
         return ["", ""]
     response = hub.execute_get(matchedFilesURL)
     if response.status_code == 200:
@@ -74,8 +73,7 @@ def getCompositePathContext(comp):
     try:
         result.append(matched_files['items'][0]['filePath']['path'])
         result.append(matched_files['items'][0]['filePath']['fileName'])
-    except (TypeError, KeyError, IndexError) as e:
-        print(e)
+    except (TypeError, KeyError, IndexError):
         return ["", ""]
     return result
 

@@ -62,19 +62,22 @@ def clean_up_date(date_string):
 def getCompositePathContext(comp):
     try:
         matchedFilesURL = comp['_meta']['links'][4]['href']
-    except TypeError:
+    except TypeError as e:
+        print(e)
         return ["", ""]
     response = hub.execute_get(matchedFilesURL)
-    mfJson = None
     if response.status_code == 200:
-        mfJson = response.json()
-    result = []
-    if mfJson['totalCount'] > 0:
-        result.append(mfJson['items'][0]['filePath']['path'])
-        result.append(mfJson['items'][0]['filePath']['fileName'])
-        return result
+        matched_files = response.json()
     else:
         return ["", ""]
+    result = []
+    try:
+        result.append(matched_files['items'][0]['filePath']['path'])
+        result.append(matched_files['items'][0]['filePath']['fileName'])
+    except (TypeError, KeyError, IndexError) as e:
+        print(e)
+        return ["", ""]
+    return result
 
 
 def get_component_URL_and_description(bomComponent):
@@ -147,7 +150,8 @@ def get_component_remediating_data(comp_version_name_url):
 
 
 def get_header():
-    return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name", "Component Version Name",
+    return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name",
+            "Component Version Name",
             "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
             "Remediation Created At", "Solution", "Solution Date", "Remediation Comment", "License Names",

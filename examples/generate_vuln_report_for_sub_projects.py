@@ -260,7 +260,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         try:
             fpv_released_on_date = clean_up_date(component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
             r.append(fpv_released_on_date)
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             r.append("")
             # print("Solution Date not available for - {}".format(v_name_key))
 

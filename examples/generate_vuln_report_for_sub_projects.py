@@ -6,6 +6,7 @@ import shutil
 import time
 
 import pandas
+from pandas.errors import EmptyDataError
 
 from blackduck.HubRestApi import HubInstance
 
@@ -393,7 +394,11 @@ def concat():
     all_csvs = glob.glob(os.path.join(curdir, '*.csv'))
     all_data_frames = []
     for csv in all_csvs:
-        data_frame = pandas.read_csv(csv, index_col=None)
+        try:
+            data_frame = pandas.read_csv(csv, index_col=None)
+        except EmptyDataError:
+            data_frame = pandas.DataFrame()
+
         all_data_frames.append(data_frame)
     data_frame_concat = pandas.concat(all_data_frames, axis=0, ignore_index=True)
     data_frame_concat.to_csv(file_out, index=False, quoting=1)

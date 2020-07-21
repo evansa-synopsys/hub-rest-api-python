@@ -224,7 +224,20 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
     for vuln in component_vuln_information:
         v_name_key = vuln['name']
-        r.append(v_name_key)
+        try:
+            if v_name_key and vuln['_meta']['links'][1]:
+                nvd = vuln['_meta']['links'][1]['href'].split('/')
+                nvd_name = nvd[len(nvd) - 1]
+                if nvd_name == "default-remediation-status":
+                    nvd_name = nvd[len(nvd) - 2]
+                if nvd_name == v_name_key:
+                    r.append(v_name_key)
+                else:
+                    r.append("{}({})".format(nvd_name, v_name_key))
+            else:
+                r.append(v_name_key)
+        except (IndexError, TypeError):
+            r.append(v_name_key)
         r.append(vuln['severity'])
 
         # prioritizes cvss3 over cvss2

@@ -225,17 +225,18 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
     for vuln in component_vuln_information:
         v_name_key = vuln['name']
         try:
+            nvd_name = ""
             if v_name_key and vuln['_meta']['links'][1]:
                 nvd = vuln['_meta']['links'][1]['href'].split('/')
                 nvd_name = nvd[len(nvd) - 1]
                 if nvd_name == "default-remediation-status":
                     nvd_name = nvd[len(nvd) - 2]
-                if nvd_name == v_name_key:
-                    r.append(v_name_key)
-                else:
-                    r.append("{}({})".format(nvd_name, v_name_key))
-            else:
+            if vuln['source'] == "NVD":
                 r.append(v_name_key)
+            elif nvd_name.startswith("CWE"):
+                r.append(v_name_key)
+            else:
+                r.append("{}({})".format(nvd_name, v_name_key))
         except (IndexError, TypeError):
             r.append(v_name_key)
         r.append(vuln['severity'])
@@ -313,7 +314,7 @@ def generate_child_reports(component):
     child_project_name = component['componentName']
     child_project_version_name = component['componentVersionName']
     child_project_version = hub.get_project_version_by_name(child_project_name, child_project_version_name)
-    child_project_components = hub.get_version_components(child_project_version)
+    child_project_components = hub.get_version_components(child_project_version, 100000)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
     child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M_%S')
@@ -356,7 +357,7 @@ def generate_child_reports(component):
 def genreport():
     # build up the datasets
     projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
-    components = hub.get_version_components(projversion)
+    components = hub.get_version_components(projversion, 100000)
     vulnerable_components = hub.get_vulnerable_bom_components(projversion)
     vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
     project_name = args.project_name

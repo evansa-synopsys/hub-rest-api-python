@@ -112,6 +112,7 @@ def get_license_names_and_family(bom_component):
 # search the list of vulnerable components for a matching component version url, return a list of vulnerabilities with
 # remediation details for that bom component
 def get_component_vuln_information(bom_component):
+    global result
     response = hub.execute_get(
         "{}{}".format(bom_component['_meta']['links'][3].get('href'), hub.get_limit_paramstring(10000)))
     if response.status_code == 200:
@@ -179,8 +180,12 @@ def append_component_info(component, package_type, url_and_des, license_names_an
     for i in range(10):
         row.append("")
 
-    row.append(license_names_and_family[0])
-    row.append(license_names_and_family[1])
+    try:
+        row.append(license_names_and_family[0])
+        row.append(license_names_and_family[1])
+    except IndexError as er:
+        print("no license information found for:{} {} ".format(component['componentName'], er))
+        row.append("", "")
 
     for ud in url_and_des:
         if not ud:
@@ -266,14 +271,16 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
 
         try:
-            fixes_prev_vulnerabilities = component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+            fixes_prev_vulnerabilities = \
+            component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
             r.append(fixes_prev_vulnerabilities)
         except (KeyError, TypeError):
             r.append("")
             # print("Solution not available for - {}".format(v_name_key))
 
         try:
-            fpv_released_on_date = clean_up_date(component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
+            fpv_released_on_date = clean_up_date(
+                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
             r.append(fpv_released_on_date)
         except (KeyError, IndexError, TypeError):
             r.append("")

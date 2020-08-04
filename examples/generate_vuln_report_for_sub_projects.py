@@ -63,7 +63,8 @@ def clean_up_date(date_string):
 def getCompositePathContext(comp):
     try:
         matchedFilesURL = comp['_meta']['links'][4]['href']
-    except TypeError:
+    except TypeError as err:
+        print("Error getting matched files for {}".format(comp['component']), err)
         return ["", ""]
     response = hub.execute_get(matchedFilesURL)
     if response.status_code == 200:
@@ -72,8 +73,12 @@ def getCompositePathContext(comp):
         return ["", ""]
     result = []
     try:
-        result.append(matched_files['items'][0]['filePath']['path'])
-        result.append(matched_files['items'][0]['filePath']['fileName'])
+        if len(matched_files['items']) <= 0 and comp['origins'][0]['externalId']:
+            result.append(comp['origins'][0]['externalId'])
+            result.append(comp['origins'][0]['externalNamespace'])
+        else:
+            result.append(matched_files['items'][0]['filePath']['path'])
+            result.append(matched_files['items'][0]['filePath']['fileName'])
     except (TypeError, KeyError, IndexError):
         return ["", ""]
     return result
@@ -272,7 +277,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         try:
             fixes_prev_vulnerabilities = \
-            component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
             r.append(fixes_prev_vulnerabilities)
         except (KeyError, TypeError):
             r.append("")

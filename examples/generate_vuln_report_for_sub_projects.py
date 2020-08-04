@@ -326,7 +326,7 @@ def generate_child_reports(component):
     child_project_name = component['componentName']
     child_project_version_name = component['componentVersionName']
     child_project_version = hub.get_project_version_by_name(child_project_name, child_project_version_name)
-    child_project_components = hub.get_version_components(child_project_version, 100000)
+    child_project_components = hub.get_version_components(child_project_version, 10000)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
     child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M_%S')
@@ -369,7 +369,7 @@ def generate_child_reports(component):
 def genreport():
     # build up the datasets
     projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
-    components = hub.get_version_components(projversion, 100000)
+    components = hub.get_version_components(projversion, 10000)
     vulnerable_components = hub.get_vulnerable_bom_components(projversion)
     vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
     project_name = args.project_name

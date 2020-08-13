@@ -190,7 +190,8 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append(license_names_and_family[1])
     except IndexError as er:
         print("no license information found for:{} {} ".format(component['componentName'], er))
-        row.append("", "")
+        row.append("")
+        row.append("")
 
     for ud in url_and_des:
         if not ud:
@@ -236,7 +237,12 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         v_name_key = vuln['name']
         try:
             nvd_name = ""
-            if v_name_key and vuln['_meta']['links'][1]:
+            related_vulnerabilities = [row for row in vuln['_meta']['links'] if
+                                       row.get('rel') == "related-vulnerabilities"]
+            if related_vulnerabilities[0].get('label') == "NVD":
+                nvd = related_vulnerabilities[0]['href'].split('/')
+                nvd_name = nvd[len(nvd) - 1]
+            elif v_name_key and vuln['_meta']['links'][1]:
                 nvd = vuln['_meta']['links'][1]['href'].split('/')
                 nvd_name = nvd[len(nvd) - 1]
                 if nvd_name == "default-remediation-status":
@@ -247,7 +253,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(v_name_key)
             else:
                 r.append("{}({})".format(nvd_name, v_name_key))
-        except (IndexError, TypeError):
+        except (IndexError, TypeError, KeyError):
             r.append(v_name_key)
         r.append(vuln['severity'])
 

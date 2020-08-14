@@ -154,6 +154,22 @@ def get_component_remediating_data(comp_version_name_url):
     return remediating_data
 
 
+# get the short term target upgrade version
+def get_upgrade_guidance_version_name(comp_version_url):
+    url = "{}{}".format(comp_version_url, "/upgrade-guidance")
+    resp = hub.execute_get(url)
+    upgrade_target_version = ""
+    if resp.status_code in [200, 201]:
+        try:
+            if resp.json()['shortTerm']['versionName']:
+                upgrade_target_version = resp.json()['shortTerm']['versionName']
+            else:
+                upgrade_target_version = resp.json()['shortTerm']['versionName']
+        except(KeyError, TypeError) as err:
+            print("no upgrade guidance for {} {}".format(comp_version_url), err)
+    return upgrade_target_version
+
+
 def get_header():
     return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name",
             "Component Version Name",
@@ -198,7 +214,6 @@ def append_component_info(component, package_type, url_and_des, license_names_an
             row.append("")
         else:
             row.append(ud)
-
     try:
         row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
         row.append(
@@ -282,9 +297,13 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
 
         try:
-            fixes_prev_vulnerabilities = \
-                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
-            r.append(fixes_prev_vulnerabilities)
+            upgrade_target = get_upgrade_guidance_version_name(comp_version_url)
+            if not upgrade_target:
+                fixes_prev_vulnerabilities = \
+                    component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+                r.append(fixes_prev_vulnerabilities)
+            else:
+                r.append(upgrade_target)
         except (KeyError, TypeError):
             r.append("")
             # print("Solution not available for - {}".format(v_name_key))

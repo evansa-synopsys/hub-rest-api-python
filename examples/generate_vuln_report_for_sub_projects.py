@@ -161,12 +161,14 @@ def get_upgrade_guidance_version_name(comp_version_url):
     upgrade_target_version = ""
     if resp.status_code in [200, 201]:
         try:
-            if resp.json()['shortTerm']['versionName']:
-                upgrade_target_version = resp.json()['shortTerm']['versionName']
-            else:
-                upgrade_target_version = resp.json()['shortTerm']['versionName']
-        except(KeyError, TypeError) as err:
-            print("no upgrade guidance for {} {}".format(comp_version_url), err)
+            upgrade_target_version = resp.json()['shortTerm']['versionName']
+        except(KeyError, TypeError, IndexError) as err:
+            print("no upgrade guidance for {} {}".format(comp_version_url, err))
+        try:
+            upgrade_target_version = resp.json()['longTerm']['versionName']
+        except(KeyError, TypeError, IndexError) as err:
+            print("no upgrade guidance for {} {}".format(comp_version_url, err))
+            return upgrade_target_version
     return upgrade_target_version
 
 

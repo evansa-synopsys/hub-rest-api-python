@@ -1,8 +1,11 @@
 import argparse
 import csv
 import glob
+import logging
 import os
 import shutil
+
+import sys
 import time
 
 import pandas
@@ -15,9 +18,19 @@ parser.add_argument("project_name")
 parser.add_argument("version_name")
 parser.add_argument('-r', '--refresh', action='store_true',
                     help='delete existing reports in the results directory and regenerate')
+parser.add_argument('-v', '--verbose', action='store_true', default=False, help='turn on DEBUG logging')
 
 args = parser.parse_args()
 hub = HubInstance()
+
+
+def set_logging_level(log_level):
+    logging.basicConfig(stream=sys.stderr, level=log_level)
+
+if args.verbose:
+    set_logging_level(logging.DEBUG)
+else:
+    set_logging_level(logging.INFO)
 
 projname = args.project_name
 timestamp = time.strftime('%m_%d_%Y_%H_%M')
@@ -64,7 +77,7 @@ def getCompositePathContext(comp):
     try:
         matchedFilesURL = comp['_meta']['links'][4]['href']
     except TypeError as err:
-        print("Error getting matched files for {}".format(comp['component']), err)
+        logging.debug("Error getting matched files for {}".format(comp['component']), err)
         return ["", ""]
     response = hub.execute_get(matchedFilesURL)
     if response.status_code == 200:
@@ -99,7 +112,6 @@ def get_component_URL_and_description(bomComponent):
 def get_license_names_and_family(bom_component):
     result = []
     if bom_component['licenses'][0]['licenses']:
-        # print(bom_component['licenses'][0]['licenses'])
         license_url = bom_component['licenses'][0]['licenses'][0]['license']
         response = hub.execute_get(license_url)
     else:
@@ -162,12 +174,13 @@ def get_upgrade_guidance_version_name(comp_version_url):
     if resp.status_code in [200, 201]:
         try:
             upgrade_target_version = resp.json()['shortTerm']['versionName']
+            return upgrade_target_version
         except(KeyError, TypeError, IndexError) as err:
-            print("no upgrade guidance for {} {}".format(comp_version_url, err))
+            logging.debug("no short term upgrade guidance for {} {}".format(comp_version_url, err))
         try:
             upgrade_target_version = resp.json()['longTerm']['versionName']
         except(KeyError, TypeError, IndexError) as err:
-            print("no upgrade guidance for {} {}".format(comp_version_url, err))
+            logging.debug("no long term upgrade guidance for {} {}".format(comp_version_url, err))
             return upgrade_target_version
     return upgrade_target_version
 
@@ -207,7 +220,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append(license_names_and_family[0])
         row.append(license_names_and_family[1])
     except IndexError as er:
-        print("no license information found for:{} {} ".format(component['componentName'], er))
+        logging.debug("no license information found for:{} {} ".format(component['componentName'], er))
         row.append("")
         row.append("")
 
@@ -270,7 +283,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(v_name_key)
             else:
                 r.append("{}({})".format(nvd_name, v_name_key))
-        except (IndexError, TypeError, KeyError):
+        except (IndexError, TypeError, KeyError) as err:
+            logging.debug("{} with err {}".format("failed to vulnerability record name and source", err))
             r.append(v_name_key)
         r.append(vuln['severity'])
 
@@ -282,20 +296,28 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
             else:
                 r.append("")
-        except (KeyError, TypeError):
+        except(KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("failed to get cvs score", err))
             r.append("")
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
-        except (KeyError, TypeError):
+        except(KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("failed to get remediationStatus", err))
             r.append("")
 
-        r.append(clean_up_date(vuln['publishedDate']))
-        r.append(clean_up_date(vuln['updatedDate']))
+        try:
+            r.append(clean_up_date(vuln['publishedDate']))
+            r.append(clean_up_date(vuln['updatedDate']))
+        except(KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("failed to get remediationStatus", err))
+            r.append("")
+            r.append("")
 
         try:
             r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt']))
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("failed to get createdAt date", err))
             r.append("")
 
         try:
@@ -306,26 +328,34 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(fixes_prev_vulnerabilities)
             else:
                 r.append(upgrade_target)
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("failed to get upgrade guidance", err))
             r.append("")
-            # print("Solution not available for - {}".format(v_name_key))
+            # logging.debug("Solution not available for - {}".format(v_name_key))
 
         try:
             fpv_released_on_date = clean_up_date(
                 component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
             r.append(fpv_released_on_date)
-        except (KeyError, IndexError, TypeError):
+        except (KeyError, IndexError, TypeError) as err:
+            logging.debug("{} with err {}".format("Failed to get fixPreviousVulnerabilities released on date", err))
             r.append("")
-            # print("Solution Date not available for - {}".format(v_name_key))
+            # logging.debug("Solution Date not available for - {}".format(v_name_key))
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
-        except (KeyError, TypeError):
+        except (KeyError, TypeError) as err:
+            logging.debug("{} with err {}".format("Failed to get component remediation info", err))
             r.append("")
-            # print("No remediation comment for - {}".format(v_name_key))
+            # logging.debug("No remediation comment for - {}".format(v_name_key))
 
-        r.append(license_names_and_family[0])
-        r.append(license_names_and_family[1])
+        try:
+            r.append(license_names_and_family[0])
+            r.append(license_names_and_family[1])
+        except(KeyError, IndexError, TypeError) as err:
+            logging.debug("{} with err {}".format("Failed to get license name and family", err))
+            r.append("")
+            r.append("")
 
         for ud in url_and_des:
             if not ud:

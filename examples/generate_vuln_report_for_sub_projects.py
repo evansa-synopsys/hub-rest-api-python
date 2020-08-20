@@ -27,6 +27,7 @@ hub = HubInstance()
 def set_logging_level(log_level):
     logging.basicConfig(stream=sys.stderr, level=log_level)
 
+
 if args.verbose:
     set_logging_level(logging.DEBUG)
 else:
@@ -164,6 +165,16 @@ def get_component_remediating_data(comp_version_name_url):
         r_val = rj
         remediating_data.update({r_key: r_val})
     return remediating_data
+
+
+def get_origin_url(comp):
+    assert 'origins' in comp, "component must have an origins object"
+    try:
+        assert comp.get('origins')[0], "component must have an origin object"
+    except IndexError:
+        return comp.get('origins')
+    assert 'origin' in comp.get('origins')[0]['origin'], "component must have an origin URL"
+    return comp.get('origins')[0]['origin']
 
 
 # get the short term target upgrade version
@@ -321,13 +332,16 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
 
         try:
-            upgrade_target = get_upgrade_guidance_version_name(comp_version_url)
-            if not upgrade_target:
-                fixes_prev_vulnerabilities = \
-                    component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
-                r.append(fixes_prev_vulnerabilities)
-            else:
-                r.append(upgrade_target)
+            comp_origin_url = get_origin_url(component)
+            assert comp_origin_url, "Origin must be set"
+            upgrade_target = get_upgrade_guidance_version_name(comp_origin_url)
+            assert upgrade_target, "Upgrade guidance available"
+            r.append(upgrade_target)
+        except AssertionError as err:
+            fixes_prev_vulnerabilities = \
+                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+            r.append(fixes_prev_vulnerabilities)
+            logging.debug("{} with err {}".format("Upgrade guidance falling back to fixesPreviousVulnerabilities", err))
         except (KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get upgrade guidance", err))
             r.append("")

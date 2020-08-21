@@ -4,7 +4,7 @@ import glob
 import logging
 import os
 import shutil
-
+import re
 import sys
 import time
 
@@ -228,6 +228,12 @@ def get_upgrade_guidance_version_name(comp_version_url):
             return upgrade_target_version
     return upgrade_target_version
 
+def format_leading_zeros(n):
+    match_re = '^0+[0-9]+\.*[0-9]*'
+    if not re.match(match_re, str(n)):
+        return n
+    else:
+        return "{}{}".format("=\"",n,"\"")
 
 def get_header():
     return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name",
@@ -254,7 +260,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append("")
 
     row.append(component['componentName'])
-    row.append(component['componentVersionName'])
+    row.append(format_leading_zeros(component['componentVersionName']))
 
     component_row_list = []
     for i in range(10):
@@ -274,12 +280,14 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         else:
             row.append(ud)
     try:
-        row.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-        row.append(
-            clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
+        latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
+        latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')
     except (KeyError, TypeError):
         row.append(component['componentVersionName'])
         row.append(clean_up_date(component['releasedOn']))
+    else:
+        row.append(format_leading_zeros(latest_after_current))
+        row.append(clean_up_date(latest_after_current_date))
 
     component_row_list.append(row.copy())
 
@@ -305,7 +313,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         row.append("")
 
     r.append(component['componentName'])
-    r.append(component['componentVersionName'])
+    r.append(format_leading_zeros(component['componentVersionName']))
 
     for vuln in component_vuln_information:
         v_name_key = vuln['name']
@@ -334,15 +342,17 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         # prioritizes cvss3 over cvss2
         try:
-            if vuln_component_remediation_info.get(v_name_key)['cvss3']:
-                r.append(vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore'))
-            elif vuln_component_remediation_info.get(v_name_key)['cvss2']:
-                r.append(vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore'))
-            else:
+            cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore')
+        except (KeyError, TypeError) as err:
+            try:
+                cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore')
+            except(KeyError, TypeError) as err:
+                logging.debug("{} with err {}".format("failed to get cvs3 and cvs2 scores", err))
                 r.append("")
-        except(KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("failed to get cvs score", err))
-            r.append("")
+            else:
+                r.append(format_leading_zeros(cvs_score))
+        else:
+            r.append(format_leading_zeros(cvs_score))
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
@@ -375,18 +385,18 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 upgrade_target = upgrade_guidance.get(comp_version_url)
                 assert upgrade_target, "No upgrade guidance for {} using fixesPreviousVulnerabilities".format(
                     comp_version_url)
-                r.append(upgrade_target)
+                r.append(format_leading_zeros(upgrade_target))
             except AssertionError:
                 fixes_prev_vulnerabilities = \
                     component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
                 r.append(fixes_prev_vulnerabilities)
                 logging.debug(
-                    "{} with err {}".format("No pgrade guidance, falling back to fixesPreviousVulnerabilities", err))
+                    "{} with err {}".format("No upgrade guidance, falling back to fixesPreviousVulnerabilities", err))
         except (KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get upgrade guidance", err))
             r.append("")
         else:
-            r.append(upgrade_target)
+            r.append(format_leading_zeros(upgrade_target))
 
         try:
             fpv_released_on_date = clean_up_date(
@@ -418,12 +428,16 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append(ud)
 
         try:
-            r.append(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name'))
-            r.append(
-                clean_up_date(component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')))
-        except (KeyError, TypeError):
+            latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
+            latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')
+        except (KeyError, TypeError) as err:
+            logging.debug("key error or type error on  {} {}".format(comp_version_url, err))
             r.append(component['componentVersionName'])
             r.append(clean_up_date(component['releasedOn']))
+        else:
+            r.append(format_leading_zeros(latest_after_current))
+            r.append(clean_up_date(latest_after_current_date))
+
 
         rl.append(r.copy())
         r = r[0:6]
@@ -545,7 +559,7 @@ def concat():
 
         all_data_frames.append(data_frame)
     data_frame_concat = pandas.concat(all_data_frames, axis=0, ignore_index=True)
-    data_frame_concat.to_csv(file_out, index=False, quoting=1)
+    data_frame_concat.to_csv(file_out, index=False)
     shutil.move(file_out, '../results/')
     shutil.rmtree('../temp', ignore_errors=True)
 

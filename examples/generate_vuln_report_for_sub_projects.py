@@ -233,7 +233,8 @@ def format_leading_zeros(n):
     if not re.match(match_re, str(n)):
         return n
     else:
-        return "{}{}".format("=\"",n,"\"")
+        return "{}{}{}".format("=\"",n,"\"")
+
 
 def get_header():
     return ["Project Name", "Project Version", "Package Path", "Package Type", "Component Name",

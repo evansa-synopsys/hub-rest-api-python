@@ -137,19 +137,22 @@ def get_component_vuln_information(bom_component):
         result = response.json().get('items')
     return result
 
+
 def build_upgrade_guidance(components):
     guidance_dict = dict()
     components_with_origins = [comp for comp in components['items'] if comp.get('origins')]
-    components_without_origins = [comp for comp in components['items'] if not comp.get('origins') and comp.get('componentVersion')]
+    components_without_origins = [comp for comp in components['items'] if
+                                  not comp.get('origins') and comp.get('componentVersion')]
 
     for cwoo in components_without_origins:
         r_key = cwoo.get('componentVersion')
         r_val = get_upgrade_guidance_version_name(cwoo.get('componentVersion'))
-        r_dict = {r_key:r_val}
+        r_dict = {r_key: r_val}
         guidance_dict.update(r_dict)
 
     for cwo in components_with_origins:
-        ug_url = [guidance for guidance in cwo.get('origins')[0]['_meta']['links'] if guidance['rel'] == "upgrade-guidance"]
+        ug_url = [guidance for guidance in cwo.get('origins')[0]['_meta']['links'] if
+                  guidance['rel'] == "upgrade-guidance"]
         assert ug_url[0], "guidance url must exist"
         response = hub.execute_get(ug_url[0].get('href'))
         if response.status_code in [200, 201]:
@@ -162,7 +165,7 @@ def build_upgrade_guidance(components):
                     r_val = result_json['longTerm']['versionName']
                 except KeyError:
                     r_val = ""
-            r_dict = {r_key:r_val}
+            r_dict = {r_key: r_val}
             guidance_dict.update(r_dict)
             continue
     return guidance_dict
@@ -356,42 +359,49 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
 
         try:
-            r.append(clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt']))
+            created_at = clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt'])
         except (KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get createdAt date", err))
             r.append("")
+        else:
+            r.append(created_at)
 
         try:
             comp_origin_url = get_origin_url(component)
-            assert comp_origin_url, "Origin must be set"
+            assert comp_origin_url, "No origin url, use version url"
             upgrade_target = upgrade_guidance.get(comp_origin_url)
-            assert upgrade_target, "Upgrade guidance available"
-            r.append(upgrade_target)
         except AssertionError as err:
-            fixes_prev_vulnerabilities = \
-                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
-            r.append(fixes_prev_vulnerabilities)
-            logging.debug("{} with err {}".format("Upgrade guidance falling back to fixesPreviousVulnerabilities", err))
+            try:
+                upgrade_target = upgrade_guidance.get(comp_version_url)
+                assert upgrade_target, "No upgrade guidance for {} using fixesPreviousVulnerabilities".format(
+                    comp_version_url)
+                r.append(upgrade_target)
+            except AssertionError:
+                fixes_prev_vulnerabilities = \
+                    component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
+                r.append(fixes_prev_vulnerabilities)
+                logging.debug(
+                    "{} with err {}".format("No pgrade guidance, falling back to fixesPreviousVulnerabilities", err))
         except (KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get upgrade guidance", err))
             r.append("")
-            # logging.debug("Solution not available for - {}".format(v_name_key))
+        else:
+            r.append(upgrade_target)
 
         try:
             fpv_released_on_date = clean_up_date(
                 component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
-            r.append(fpv_released_on_date)
         except (KeyError, IndexError, TypeError) as err:
             logging.debug("{} with err {}".format("Failed to get fixPreviousVulnerabilities released on date", err))
             r.append("")
-            # logging.debug("Solution Date not available for - {}".format(v_name_key))
+        else:
+            r.append(fpv_released_on_date)
 
         try:
             r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
         except (KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("Failed to get component remediation info", err))
+            logging.debug("No remediation comment for {} with error {}".format(v_name_key, err))
             r.append("")
-            # logging.debug("No remediation comment for - {}".format(v_name_key))
 
         try:
             r.append(license_names_and_family[0])
@@ -428,6 +438,8 @@ def generate_child_reports(component):
     child_project_version_name = component['componentVersionName']
     child_project_version = hub.get_project_version_by_name(child_project_name, child_project_version_name)
     child_project_components = hub.get_version_components(child_project_version, 10000)
+    print("Component count returned for {} {} = {} ".format(child_project_name, child_project_version_name,
+                                                            child_project_components['totalCount']))
     upgrade_guidance = build_upgrade_guidance(child_project_components)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
     child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
@@ -472,6 +484,8 @@ def genreport():
     # build up the datasets
     projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
     components = hub.get_version_components(projversion, 10000)
+    print("Component count returned for {} {} = {} ".format(args.project_name, args.version_name,
+                                                            components['totalCount']))
     upgrade_guidance = build_upgrade_guidance(components)
     vulnerable_components = hub.get_vulnerable_bom_components(projversion)
     vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
@@ -507,7 +521,8 @@ def genreport():
                 row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
                                                   license_names_and_family,
                                                   component_remediating_info, comp_version_url, url_and_des, component,
-                                                  vuln_component_remediation_info, project_name, project_version, upgrade_guidance)
+                                                  vuln_component_remediation_info, project_name, project_version,
+                                                  upgrade_guidance)
 
             for row in row_list:
                 writer.writerow(row)

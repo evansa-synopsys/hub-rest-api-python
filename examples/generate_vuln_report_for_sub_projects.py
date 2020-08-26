@@ -5,6 +5,8 @@ import logging
 import os
 import shutil
 import re
+from urllib.error import HTTPError
+
 import sys
 import time
 
@@ -19,9 +21,25 @@ parser.add_argument("version_name")
 parser.add_argument('-r', '--refresh', action='store_true',
                     help='delete existing reports in the results directory and regenerate')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='turn on DEBUG logging')
+parser.add_argument('-e', '--expires_in_seconds', default=86400, help='Set timeout period for auth token in seconds')
 
 args = parser.parse_args()
 hub = HubInstance()
+min_timeout = 1800
+if int(args.expires_in_seconds) >= min_timeout:
+    timeout = {
+        "accessTokenValiditySeconds": args.expires_in_seconds
+    }
+else:
+    raise argparse.ArgumentTypeError(
+        "Timeout value must be greater than or equal to {} (seconds). You gave {}".format(min_timeout,
+                                                                                          args.expires_in_seconds))
+
+extend_auth_timeout_response = hub.execute_put("{}/system-oauth-client".format(hub.get_apibase()), data=timeout)
+if extend_auth_timeout_response.status_code in [200, 201]:
+    print("Extending auth token expiration to {} seconds".format(args.expires_in_seconds))
+else:
+    print("Auth token will expire in 2h (default)")
 
 
 def set_logging_level(log_level):
@@ -130,11 +148,13 @@ def get_license_names_and_family(bom_component):
 # search the list of vulnerable components for a matching component version url, return a list of vulnerabilities with
 # remediation details for that bom component
 def get_component_vuln_information(bom_component):
-    global result
+    result = []
     response = hub.execute_get(
         "{}{}".format(bom_component['_meta']['links'][3].get('href'), hub.get_limit_paramstring(10000)))
-    if response.status_code == 200:
+    if response.status_code in [200, 201]:
         result = response.json().get('items')
+    else:
+        response.raise_for_status()
     return result
 
 
@@ -228,12 +248,13 @@ def get_upgrade_guidance_version_name(comp_version_url):
             return upgrade_target_version
     return upgrade_target_version
 
+
 def format_leading_zeros(n):
     match_re = '^0+[0-9]+\.*[0-9]*'
     if not re.match(match_re, str(n)):
         return n
     else:
-        return "{}{}{}".format("=\"",n,"\"")
+        return "{}{}{}".format("=\"", n, "\"")
 
 
 def get_header():
@@ -282,7 +303,8 @@ def append_component_info(component, package_type, url_and_des, license_names_an
             row.append(ud)
     try:
         latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
-        latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')
+        latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get(
+            'releasedOn')
     except (KeyError, TypeError):
         row.append(component['componentVersionName'])
         row.append(clean_up_date(component['releasedOn']))
@@ -337,7 +359,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             else:
                 r.append("{}({})".format(nvd_name, v_name_key))
         except (IndexError, TypeError, KeyError) as err:
-            logging.debug("{} with err {}".format("failed to vulnerability record name and source", err))
+            logging.debug("{} with err {}, using default {} instead".format("failed to get vulnerability record name "
+                                                                            "and source", err, v_name_key))
             r.append(v_name_key)
         r.append(vuln['severity'])
 
@@ -356,18 +379,23 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append(format_leading_zeros(cvs_score))
 
         try:
-            r.append(vuln_component_remediation_info.get(v_name_key)['remediationStatus'])
+            rem_status = vuln_component_remediation_info.get(v_name_key)['remediationStatus']
         except(KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get remediationStatus", err))
             r.append("")
+        else:
+            r.append(rem_status)
 
         try:
-            r.append(clean_up_date(vuln['publishedDate']))
-            r.append(clean_up_date(vuln['updatedDate']))
+            published_date = clean_up_date(vuln['publishedDate'])
+            updated_date = clean_up_date(vuln['updatedDate'])
         except(KeyError, TypeError) as err:
             logging.debug("{} with err {}".format("failed to get remediationStatus", err))
             r.append("")
             r.append("")
+        else:
+            r.append(published_date)
+            r.append(updated_date)
 
         try:
             created_at = clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt'])
@@ -409,18 +437,23 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append(fpv_released_on_date)
 
         try:
-            r.append(vuln_component_remediation_info.get(v_name_key)['comment'])
+            rem_comment = vuln_component_remediation_info.get(v_name_key)['comment']
         except (KeyError, TypeError) as err:
             logging.debug("No remediation comment for {} with error {}".format(v_name_key, err))
             r.append("")
+        else:
+            r.append(rem_comment)
 
         try:
-            r.append(license_names_and_family[0])
-            r.append(license_names_and_family[1])
+            l_name = license_names_and_family[0]
+            l_family = license_names_and_family[1]
         except(KeyError, IndexError, TypeError) as err:
             logging.debug("{} with err {}".format("Failed to get license name and family", err))
             r.append("")
             r.append("")
+        else:
+            r.append(l_name)
+            r.append(l_family)
 
         for ud in url_and_des:
             if not ud:
@@ -430,7 +463,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
 
         try:
             latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
-            latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('releasedOn')
+            latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get(
+                'releasedOn')
         except (KeyError, TypeError) as err:
             logging.debug("key error or type error on  {} {}".format(comp_version_url, err))
             r.append(component['componentVersionName'])
@@ -438,7 +472,6 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         else:
             r.append(format_leading_zeros(latest_after_current))
             r.append(clean_up_date(latest_after_current_date))
-
 
         rl.append(r.copy())
         r = r[0:6]
@@ -470,7 +503,11 @@ def generate_child_reports(component):
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            component_vuln_information = get_component_vuln_information(component)
+            try:
+                component_vuln_information = get_component_vuln_information(component)
+            except HTTPError as err:
+                logging.debug(
+                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
             row = []
@@ -519,7 +556,11 @@ def genreport():
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            component_vuln_information = get_component_vuln_information(component)
+            try:
+                component_vuln_information = get_component_vuln_information(component)
+            except HTTPError as err:
+                logging.debug(
+                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
             row = []

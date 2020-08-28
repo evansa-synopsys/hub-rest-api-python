@@ -7,6 +7,7 @@ import shutil
 import re
 from urllib.error import HTTPError
 
+import requests
 import sys
 import time
 
@@ -166,7 +167,11 @@ def build_upgrade_guidance(components):
 
     for cwoo in components_without_origins:
         r_key = cwoo.get('componentVersion')
-        r_val = get_upgrade_guidance_version_name(cwoo.get('componentVersion'))
+        try:
+            r_val = get_upgrade_guidance_version_name(cwoo.get('componentVersion'))
+        except requests.exceptions.HTTPError as err:
+            logging.debug("no upgrade guidance for:{}, with {}, writing an empty field ".format(r_key, err))
+            r_val = ""
         r_dict = {r_key: r_val}
         guidance_dict.update(r_dict)
 
@@ -178,16 +183,12 @@ def build_upgrade_guidance(components):
         if response.status_code in [200, 201]:
             result_json = response.json()
             r_key = result_json['origin']
-            try:
-                r_val = result_json['shortTerm']['versionName']
-            except KeyError:
-                try:
-                    r_val = result_json['longTerm']['versionName']
-                except KeyError:
-                    r_val = ""
+            r_val = result_json
             r_dict = {r_key: r_val}
             guidance_dict.update(r_dict)
             continue
+        else:
+            response.raise_for_status()
     return guidance_dict
 
 
@@ -236,16 +237,10 @@ def get_upgrade_guidance_version_name(comp_version_url):
     resp = hub.execute_get(url)
     upgrade_target_version = ""
     if resp.status_code in [200, 201]:
-        try:
-            upgrade_target_version = resp.json()['shortTerm']['versionName']
-            return upgrade_target_version
-        except(KeyError, TypeError, IndexError) as err:
-            logging.debug("no short term upgrade guidance for {} {}".format(comp_version_url, err))
-        try:
-            upgrade_target_version = resp.json()['longTerm']['versionName']
-        except(KeyError, TypeError, IndexError) as err:
-            logging.debug("no long term upgrade guidance for {} {}".format(comp_version_url, err))
-            return upgrade_target_version
+        upgrade_target_version = resp.json()
+    else:
+        resp.raise_for_status()
+        return upgrade_target_version
     return upgrade_target_version
 
 
@@ -262,9 +257,9 @@ def get_header():
             "Component Version Name",
             "Vulnerability Name", "Severity",
             "Base Score", "Remediation Status", "Vulnerability Published Date", "Vulnerability Updated Date",
-            "Remediation Created At", "Fixed In", "Fix Available On", "Remediation Comment", "License Names",
+            "Remediation Created At", "Fixed In", "Remediation Comment", "License Names",
             "License Family",
-            "Download URL", "Component Description", "Latest Version Available", "Latest Version Release Date"]
+            "Download URL", "Component Description", "Latest Version Available"]
 
 
 def append_component_info(component, package_type, url_and_des, license_names_and_family, comp_version_url,
@@ -285,7 +280,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
     row.append(format_leading_zeros(component['componentVersionName']))
 
     component_row_list = []
-    for i in range(10):
+    for i in range(9):
         row.append("")
 
     try:
@@ -303,14 +298,10 @@ def append_component_info(component, package_type, url_and_des, license_names_an
             row.append(ud)
     try:
         latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
-        latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get(
-            'releasedOn')
     except (KeyError, TypeError):
         row.append(component['componentVersionName'])
-        row.append(clean_up_date(component['releasedOn']))
     else:
         row.append(format_leading_zeros(latest_after_current))
-        row.append(clean_up_date(latest_after_current_date))
 
     component_row_list.append(row.copy())
 
@@ -320,6 +311,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
 def append_vulnerabilities(package_type, component_vuln_information, row_list, row, license_names_and_family,
                            component_remediating_info, comp_version_url, url_and_des, component,
                            vuln_component_remediation_info, project_name, project_version, upgrade_guidance):
+    global comp_origin_url
     rl = row_list
     r = row
 
@@ -404,38 +396,23 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             r.append("")
         else:
             r.append(created_at)
-
         try:
             comp_origin_url = get_origin_url(component)
             assert comp_origin_url, "No origin url, use version url"
-            upgrade_target = upgrade_guidance.get(comp_origin_url)
+            upgrade_target = upgrade_guidance.get(comp_origin_url)['shortTerm']['versionName']
         except AssertionError as err:
             try:
-                upgrade_target = upgrade_guidance.get(comp_version_url)
-                assert upgrade_target, "No upgrade guidance for {} using fixesPreviousVulnerabilities".format(
+                upgrade_target = upgrade_guidance.get(comp_version_url)['shortTerm']['versionName']
+                assert upgrade_target, "No short term upgrade guidance found for {} , writing an empty value".format(
                     comp_version_url)
                 r.append(format_leading_zeros(upgrade_target))
             except AssertionError:
-                fixes_prev_vulnerabilities = \
-                    component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['name']
-                r.append(fixes_prev_vulnerabilities)
-                logging.debug(
-                    "{} with err {}".format("No upgrade guidance, falling back to fixesPreviousVulnerabilities", err))
+                r.append("")
         except (KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("failed to get upgrade guidance", err))
+            logging.debug("No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
             r.append("")
         else:
             r.append(format_leading_zeros(upgrade_target))
-
-        try:
-            fpv_released_on_date = clean_up_date(
-                component_remediating_info.get(comp_version_url)['fixesPreviousVulnerabilities']['releasedOn'])
-        except (KeyError, IndexError, TypeError) as err:
-            logging.debug("{} with err {}".format("Failed to get fixPreviousVulnerabilities released on date", err))
-            r.append("")
-        else:
-            r.append(fpv_released_on_date)
-
         try:
             rem_comment = vuln_component_remediation_info.get(v_name_key)['comment']
         except (KeyError, TypeError) as err:
@@ -460,19 +437,23 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append("")
             else:
                 r.append(ud)
-
         try:
-            latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
-            latest_after_current_date = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get(
-                'releasedOn')
+            comp_origin_url = get_origin_url(component)
+            assert comp_origin_url, "No origin url, use version url"
+            upgrade_target = upgrade_guidance.get(comp_origin_url)['longTerm']['versionName']
+        except AssertionError as err:
+            try:
+                upgrade_target = upgrade_guidance.get(comp_version_url)['longTerm']['versionName']
+                assert upgrade_target, "No long term upgrade guidance found for {} , writing an empty value".format(
+                    comp_version_url)
+                r.append(format_leading_zeros(upgrade_target))
+            except AssertionError:
+                r.append("")
         except (KeyError, TypeError) as err:
-            logging.debug("key error or type error on  {} {}".format(comp_version_url, err))
-            r.append(component['componentVersionName'])
-            r.append(clean_up_date(component['releasedOn']))
+            logging.debug("No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
+            r.append("")
         else:
-            r.append(format_leading_zeros(latest_after_current))
-            r.append(clean_up_date(latest_after_current_date))
-
+            r.append(format_leading_zeros(upgrade_target))
         rl.append(r.copy())
         r = r[0:6]
     return rl

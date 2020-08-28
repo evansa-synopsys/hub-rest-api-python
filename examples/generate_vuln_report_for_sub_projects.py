@@ -22,26 +22,9 @@ parser.add_argument("version_name")
 parser.add_argument('-r', '--refresh', action='store_true',
                     help='delete existing reports in the results directory and regenerate')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='turn on DEBUG logging')
-parser.add_argument('-e', '--expires_in_seconds', default=86400, help='Set timeout period for auth token in seconds')
 
 args = parser.parse_args()
 hub = HubInstance()
-min_timeout = 1800
-if int(args.expires_in_seconds) >= min_timeout:
-    timeout = {
-        "accessTokenValiditySeconds": args.expires_in_seconds
-    }
-else:
-    raise argparse.ArgumentTypeError(
-        "Timeout value must be greater than or equal to {} (seconds). You gave {}".format(min_timeout,
-                                                                                          args.expires_in_seconds))
-
-extend_auth_timeout_response = hub.execute_put("{}/system-oauth-client".format(hub.get_apibase()), data=timeout)
-if extend_auth_timeout_response.status_code in [200, 201]:
-    print("Extending auth token expiration to {} seconds".format(args.expires_in_seconds))
-else:
-    print("Auth token will expire in 2h (default)")
-
 
 def set_logging_level(log_level):
     logging.basicConfig(stream=sys.stderr, level=log_level)

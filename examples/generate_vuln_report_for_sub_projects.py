@@ -163,15 +163,18 @@ def build_upgrade_guidance(components):
                   guidance['rel'] == "upgrade-guidance"]
         assert ug_url[0], "guidance url must exist"
         response = hub.execute_get(ug_url[0].get('href'))
-        if response.status_code in [200, 201]:
-            result_json = response.json()
-            r_key = result_json['origin']
-            r_val = result_json
-            r_dict = {r_key: r_val}
-            guidance_dict.update(r_dict)
-            continue
-        else:
-            response.raise_for_status()
+        try:
+            if response.status_code in [200, 201]:
+                result_json = response.json()
+                r_key = result_json['origin']
+                r_val = result_json
+                r_dict = {r_key: r_val}
+                guidance_dict.update(r_dict)
+                continue
+            else:
+                response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            logging.debug("no upgrade guidance for:{}, with {}, writing an empty field ".format(r_key, err))
     return guidance_dict
 
 

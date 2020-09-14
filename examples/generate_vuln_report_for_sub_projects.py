@@ -487,13 +487,14 @@ def generate_child_reports(component):
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            try:
-                component_vuln_information = get_component_vuln_information(component)
-            except HTTPError as err:
-                logging.debug(
-                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
+            try:
+                component_vuln_information = get_component_vuln_information(component)
+            except requests.exceptions.HTTPError as err:
+                component_vuln_information = []
+                logging.debug(
+                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             row = []
             if first_child_file:
                 header = get_header()
@@ -540,13 +541,14 @@ def genreport():
             package_type = getCompositePathContext(component)
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
-            try:
-                component_vuln_information = get_component_vuln_information(component)
-            except HTTPError as err:
-                logging.debug(
-                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             comp_version_url = component.get('componentVersion')
             component_remediating_info = get_component_remediating_data(comp_version_url)
+            try:
+                component_vuln_information = get_component_vuln_information(component)
+            except requests.exceptions.HTTPError as err:
+                component_vuln_information = []
+                logging.debug(
+                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
             row = []
             if first_file:
                 header = get_header()

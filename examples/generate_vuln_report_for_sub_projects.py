@@ -38,7 +38,8 @@ else:
 
 extend_auth_timeout_response = hub.execute_put("{}/system-oauth-client".format(hub.get_apibase()), data=timeout)
 if extend_auth_timeout_response.status_code in [200, 201]:
-    print("Extending auth token expiration to {} seconds".format(args.expires_in_seconds))
+    response_timeout_set_to = extend_auth_timeout_response.json()['accessTokenValiditySeconds']
+    print("Extending auth token expiration to {} seconds".format(response_timeout_set_to))
 else:
     print("Auth token will expire in 2h (default)")
 

@@ -71,7 +71,7 @@ def check_dirs():
 
 
 def get_header():
-    return ["Project Name", "Project Version", "Name", "Description", "Responsibility",
+    return ["Component Name", "Component Version", "Name", "Description", "Responsibility",
             "Deactivated", "Deprecated", "FulfillmentRequired", "Fulfilled"]
 
 

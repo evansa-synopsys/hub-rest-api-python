@@ -121,9 +121,6 @@ class HubInstance(object):
 
         self.bd_major_version = self._get_major_version()
 
-        # set token expiration to 1.75h
-        self.access_token_expiration = time.time() + 6300
-
     def read_config(self):
         with open('.restconfig.json','r') as f:
             self.config = json.load(f)
@@ -152,6 +149,9 @@ class HubInstance(object):
               traceback.print_exc()
               raise Exception("Failed to obtain bearer token, check for valid authentication token")
             print ("content of new token request: {}".format(response.text))
+
+            # set token expiration to 1.75h
+            self.access_token_expiration = time.time() + 6300
             return (bearer_token, csrf_token, None)
         else:
             authendpoint="/j_spring_security_check"

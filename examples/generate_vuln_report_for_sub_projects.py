@@ -5,7 +5,9 @@ import logging
 import os
 import shutil
 import re
+import timeit
 from urllib.error import HTTPError
+import functools
 
 import requests
 import sys
@@ -22,27 +24,22 @@ parser.add_argument("version_name")
 parser.add_argument('-r', '--refresh', action='store_true',
                     help='delete existing reports in the results directory and regenerate')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, help='turn on DEBUG logging')
-parser.add_argument('-e', '--expires_in_seconds', default=86400, help='Set timeout period for auth token in seconds')
 
 args = parser.parse_args()
-hub = HubInstance()
-min_timeout = 1800
-if int(args.expires_in_seconds) >= min_timeout:
-    timeout = {
-        "accessTokenValiditySeconds": args.expires_in_seconds
-    }
-else:
-    raise argparse.ArgumentTypeError(
-        "Timeout value must be greater than or equal to {} (seconds). You gave {}".format(min_timeout,
-                                                                                          args.expires_in_seconds))
 
-extend_auth_timeout_response = hub.execute_put("{}/system-oauth-client".format(hub.get_apibase()), data=timeout)
-if extend_auth_timeout_response.status_code in [200, 201]:
-    response_timeout_set_to = extend_auth_timeout_response.json()['accessTokenValiditySeconds']
-    print("Extending auth token expiration to {} seconds".format(response_timeout_set_to))
-else:
-    print("Auth token will expire in 2h (default)")
 
+def get_hub():
+    global hub
+    try:
+        hub = HubInstance()
+    except Exception as e:
+        print(e)
+        return None
+    else:
+        return hub
+
+
+hub = get_hub()
 
 def set_logging_level(log_level):
     logging.basicConfig(stream=sys.stderr, level=log_level)
@@ -413,7 +410,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             except AssertionError:
                 r.append("")
         except (KeyError, TypeError) as err:
-            logging.debug("No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
+            logging.debug(
+                "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
             r.append("")
         else:
             r.append(format_leading_zeros(upgrade_target))
@@ -454,7 +452,8 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
             except AssertionError:
                 r.append("")
         except (KeyError, TypeError) as err:
-            logging.debug("No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
+            logging.debug(
+                "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
             r.append("")
         else:
             r.append(format_leading_zeros(upgrade_target))
@@ -595,7 +594,10 @@ def concat():
 
 def main():
     checkdirs()
+    start = timeit.default_timer()
+    print("Starting timer: {} seconds".format(int(timeit.default_timer())))
     genreport()
+    print("Time spent generating consolidated report: {} seconds".format(int(timeit.default_timer() - start)))
     concat()
 
 

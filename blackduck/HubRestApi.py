@@ -148,8 +148,7 @@ class HubInstance(object):
               import traceback
               traceback.print_exc()
               raise Exception("Failed to obtain bearer token, check for valid authentication token")
-            print ("content of new token request: {}".format(response.text))
-
+            print ("Current token about to expire, new token requested: {}".format(response.text))
             # set token expiration to 1.75h
             self.access_token_expiration = time.time() + 6300
             return (bearer_token, csrf_token, None)
@@ -163,6 +162,9 @@ class HubInstance(object):
             response = session.post(url, credentials, verify= not self.config['insecure'])
             cookie = response.headers['Set-Cookie']
             token = cookie[cookie.index('=')+1:cookie.index(';')]
+            print ("Current token about to expire, new token requested: {}".format(response.text))
+            # set token expiration to 1.75h
+            self.access_token_expiration = time.time() + 6300
         return (token, None, cookie)
     
     def _get_hub_rest_api_version_info(self):

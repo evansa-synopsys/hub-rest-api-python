@@ -150,7 +150,7 @@ class HubInstance(object):
               raise Exception("Failed to obtain bearer token, check for valid authentication token")
             print ("Current token about to expire, new token requested: {}".format(response.text))
             # set token expiration to 1.75h
-            self.access_token_expiration = time.time() + 6300
+            self.access_token_expiration = time.time() + 3600
             return (bearer_token, csrf_token, None)
         else:
             authendpoint="/j_spring_security_check"

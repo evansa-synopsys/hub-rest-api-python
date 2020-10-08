@@ -47,6 +47,8 @@ It is possible to generate generate_config file by initalizing API as following:
     
 '''
 import logging
+import os
+
 import time
 
 import requests
@@ -86,26 +88,27 @@ class HubInstance(object):
 
     # TODO: What to do about the config file for thread-safety, concurrency
     configfile = ".restconfig.json"
-
+    global rootDir
+    rootDir = os.getcwd()
     def __init__(self, *args, **kwargs):
         # Config needs to be an instance variable for thread-safety, concurrent use of HubInstance()
         self.config = {}
-
-        try:
-            self.config['baseurl'] = args[0]
-            api_token = kwargs.get('api_token', False)
-            if api_token:
-                self.config['api_token'] = api_token
-            else:
-                self.config['username'] = args[1]
-                self.config['password'] = args[2]
-            self.config['insecure'] = kwargs.get('insecure', False)
-            self.config['debug'] = kwargs.get('debug', False)
-
-            if kwargs.get('write_config_flag', True):
-                self.write_config()
-        except Exception:
-            self.read_config()
+        self.read_config()
+        # try:
+        #     self.config['baseurl'] = args[0]
+        #     api_token = kwargs.get('api_token', False)
+        #     if api_token:
+        #         self.config['api_token'] = api_token
+        #     else:
+        #         self.config['username'] = args[1]
+        #         self.config['password'] = args[2]
+        #     self.config['insecure'] = kwargs.get('insecure', False)
+        #     self.config['debug'] = kwargs.get('debug', False)
+        #
+        #     if kwargs.get('write_config_flag', True):
+        #         self.write_config()
+        # except Exception:
+        #     self.read_config()
             
         if self.config['insecure']:
             requests.packages.urllib3.disable_warnings()
@@ -120,8 +123,10 @@ class HubInstance(object):
             self.version_info = {'version': '3'} # assume it's v3 since all versions after 3 supported version info
 
         self.bd_major_version = self._get_major_version()
-
     def read_config(self):
+        #always return to the examples directory
+        if not os.getcwd().endswith("examples"):
+            os.chdir(rootDir)
         with open('.restconfig.json','r') as f:
             self.config = json.load(f)
             
@@ -148,9 +153,12 @@ class HubInstance(object):
               import traceback
               traceback.print_exc()
               raise Exception("Failed to obtain bearer token, check for valid authentication token")
-            print ("Current token about to expire, new token requested, using restconfig api token: {}".format(response.text))
-            # set token expiration to 1.75h
-            self.access_token_expiration = time.time() + 3600
+            length = len(response.text)
+            new_token = response.text
+            token_tail = new_token[length - 50: length]
+            print ("Current bearer token about to expire, new token requested, using restconfig api token: {}".format(token_tail))
+            # set token expiration to 1.5h
+            self.access_token_expiration = time.time() + 300
             return (bearer_token, csrf_token, None)
         else:
             authendpoint="/j_spring_security_check"
@@ -235,12 +243,11 @@ class HubInstance(object):
     def get_apibase(self):
         return self.config['baseurl'] + "/api"
 
-    def reauthenticate(self):
+    def reauthenticate(self, *args, **kwargs):
         try:
-            self.get_auth_token()
-            # logging.debug("calling to get a new auth token: {}".format(self.get_auth_token()))
+            self.__init__(self, *args, **kwargs)
         except Exception as e:
-            print(e)
+            print("There was an error when refreshing the token: {}".format(e))
             return None
         else:
             return self
@@ -250,8 +257,7 @@ class HubInstance(object):
         def refresh_token(decorated):
             def wrapper(hub_api_object, *args, **kwargs):
                 if time.time() > hub_api_object.access_token_expiration:
-                    # logging.debug("calling reauthenticate because token expired: {}".format(hub_api_object.access_token_expiration))
-                    hub_api_object.reauthenticate()
+                    hub_api_object.reauthenticate(hub_api_object, *args, **kwargs)
                 return decorated(hub_api_object, *args, **kwargs)
 
             return wrapper
@@ -1686,8 +1692,14 @@ class HubInstance(object):
 
     @Decorators.refresh_token
     def execute_get(self, url, custom_headers={}):
+        l = len(self.token)
+        my_token = self.token[l-25:l]
+        logging.debug("Calling get with token ending in: {}".format(my_token))
         headers = self.get_headers()
         headers.update(custom_headers)
+        if not self.config.values():
+            self.config = self.read_config(self)
+
         response = requests.get(url, headers=headers, verify=not self.config['insecure'])
         return response
 

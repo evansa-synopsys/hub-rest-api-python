@@ -158,7 +158,7 @@ class HubInstance(object):
             token_tail = new_token[length - 50: length]
             print ("Current bearer token about to expire, new token requested, using restconfig api token: {}".format(token_tail))
             # set token expiration to 1.5h
-            self.access_token_expiration = time.time() + 300
+            self.access_token_expiration = time.time() + 5200
             return (bearer_token, csrf_token, None)
         else:
             authendpoint="/j_spring_security_check"

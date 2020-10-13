@@ -171,8 +171,8 @@ class HubInstance(object):
             cookie = response.headers['Set-Cookie']
             token = cookie[cookie.index('=')+1:cookie.index(';')]
             print ("Current token about to expire, new token requested with username and password in restconfig: {}".format(response.text))
-            # set token expiration to 1.75h
-            self.access_token_expiration = time.time() + 3600
+            # set token expiration to 1.5h
+            self.access_token_expiration = time.time() + 5200
         return (token, None, cookie)
     
     def _get_hub_rest_api_version_info(self):

@@ -177,19 +177,19 @@ def build_upgrade_guidance(components):
         ug_url = [guidance for guidance in cwo.get('origins')[0]['_meta']['links'] if
                   guidance['rel'] == "upgrade-guidance"]
         assert ug_url[0], "guidance url must exist"
-        # response = hub.execute_get(ug_url[0].get('href'))
-        # try:
-        #     if response.status_code in [200, 201]:
-        #         result_json = response.json()
-        #         r_key = result_json['origin']
-        #         r_val = result_json
-        #         r_dict = {r_key: r_val}
-        #         guidance_dict.update(r_dict)
-        #         continue
-        #     else:
-        #         response.raise_for_status()
-        # except requests.exceptions.HTTPError as err:
-        #     logging.debug("no upgrade guidance for:{}, with {}, writing an empty field ".format(r_key, err))
+        response = hub.execute_get(ug_url[0].get('href'))
+        try:
+            if response.status_code in [200, 201]:
+                result_json = response.json()
+                r_key = result_json['origin']
+                r_val = result_json
+                r_dict = {r_key: r_val}
+                guidance_dict.update(r_dict)
+                continue
+            else:
+                response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            logging.debug("no upgrade guidance for:{}, with {}, writing an empty field ".format(r_key, err))
     return guidance_dict
 
 
@@ -235,13 +235,13 @@ def get_origin_url(comp):
 # get the short term target upgrade version
 def get_upgrade_guidance_version_name(comp_version_url):
     url = "{}{}".format(comp_version_url, "/upgrade-guidance")
-    # resp = hub.execute_get(url)
+    resp = hub.execute_get(url)
     upgrade_target_version = ""
-    # if resp.status_code in [200, 201]:
-    #     upgrade_target_version = resp.json()
-    # else:
-    #     resp.raise_for_status()
-    #     return upgrade_target_version
+    if resp.status_code in [200, 201]:
+        upgrade_target_version = resp.json()
+    else:
+        resp.raise_for_status()
+        return upgrade_target_version
     return upgrade_target_version
 
 

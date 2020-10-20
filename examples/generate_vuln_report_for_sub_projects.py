@@ -479,7 +479,9 @@ def generate_child_reports(component):
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
     child_file_out = (child_file_out + ".csv")
     curdir = os.getcwd()
-    chdir_temp(curdir)
+    if not curdir.endswith("temp"):
+        curdir = os.path.join(rootDir, "temp")
+        os.chdir(curdir)
     with open(child_file_out, 'a', newline='') as f:
         first_child_file = True
         writer = csv.writer(f)
@@ -529,7 +531,9 @@ def genreport():
     project_name = args.project_name
     project_version = args.version_name
     curdir = os.getcwd()
-    chdir_temp(curdir)
+    if not curdir.endswith("temp"):
+        curdir = os.path.join(rootDir, "temp")
+        os.chdir(curdir)
     with open(file_out, 'w', newline='') as f:
         writer = csv.writer(f)
         first_file = True
@@ -572,14 +576,12 @@ def genreport():
 
 csv_list = []
 
-def chdir_temp(curdir):
-    if not curdir.endswith("temp"):
-        curdir = os.path.join(rootDir, "temp")
-        os.chdir(curdir)
 
 def concat():
     curdir = os.getcwd()
-    chdir_temp(curdir)
+    if not curdir.endswith("temp"):
+        curdir = os.path.join(rootDir, "temp")
+        os.chdir(curdir)
     all_csvs = glob.glob(os.path.join(curdir, '*.csv'))
     all_data_frames = []
     for csv in all_csvs:

@@ -88,8 +88,8 @@ class HubInstance(object):
 
     # TODO: What to do about the config file for thread-safety, concurrency
     configfile = ".restconfig.json"
-    global rootDir
-    rootDir = os.getcwd()
+    global root_dir
+    root_dir = os.getcwd()
     def __init__(self, *args, **kwargs):
         # Config needs to be an instance variable for thread-safety, concurrent use of HubInstance()
         self.config = {}
@@ -126,7 +126,7 @@ class HubInstance(object):
     def read_config(self):
         #always return to the examples directory
         if not os.getcwd().endswith("examples"):
-            os.chdir(rootDir)
+            os.chdir(root_dir)
         with open('.restconfig.json','r') as f:
             self.config = json.load(f)
             

@@ -161,7 +161,7 @@ def main():
     check_dirs()
     start = timeit.default_timer()
     genreport()
-    print("Time spent generating license report: {} seconds".format(timeit.default_timer() - start))
+    print("Time spent generating license report: {} seconds".format(int(timeit.default_timer() - start)))
     concat()
 
 

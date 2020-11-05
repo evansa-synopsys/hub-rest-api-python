@@ -416,7 +416,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         else:
             r.append(format_leading_zeros(upgrade_target))
         try:
-            rem_comment = vuln_component_remediation_info.get(v_name_key)['comment']
+            rem_comment = vuln_component_remediation_info.get(v_name_key).get('comment')
         except (KeyError, TypeError) as err:
             logging.debug("No remediation comment for {} with error {}".format(v_name_key, err))
             r.append("")

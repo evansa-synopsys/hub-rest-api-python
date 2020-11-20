@@ -94,21 +94,21 @@ class HubInstance(object):
         # Config needs to be an instance variable for thread-safety, concurrent use of HubInstance()
         self.config = {}
         self.read_config()
-        try:
-            self.config['baseurl'] = args[0]
-            api_token = kwargs.get('api_token', False)
-            if api_token:
-                self.config['api_token'] = api_token
-            else:
-                self.config['username'] = args[1]
-                self.config['password'] = args[2]
-            self.config['insecure'] = kwargs.get('insecure', False)
-            self.config['debug'] = kwargs.get('debug', False)
-
-            if kwargs.get('write_config_flag', True):
-                self.write_config()
-        except Exception:
-            self.read_config()
+        # try:
+        #     self.config['baseurl'] = args[0]
+        #     api_token = kwargs.get('api_token', False)
+        #     if api_token:
+        #         self.config['api_token'] = api_token
+        #     else:
+        #         self.config['username'] = args[1]
+        #         self.config['password'] = args[2]
+        #     self.config['insecure'] = kwargs.get('insecure', False)
+        #     self.config['debug'] = kwargs.get('debug', False)
+        #
+        #     if kwargs.get('write_config_flag', False):
+        #         self.write_config()
+        # except Exception:
+        #     self.read_config()
             
         if self.config['insecure']:
             requests.packages.urllib3.disable_warnings()
@@ -124,9 +124,7 @@ class HubInstance(object):
 
         self.bd_major_version = self._get_major_version()
     def read_config(self):
-        #always return to the examples directory to read the config
-        if not os.getcwd().endswith("examples"):
-            os.chdir(root_dir)
+        os.chdir(root_dir)
         with open('.restconfig.json','r') as f:
             self.config = json.load(f)
             

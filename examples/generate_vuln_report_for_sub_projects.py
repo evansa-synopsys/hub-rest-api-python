@@ -31,9 +31,11 @@ args = parser.parse_args()
 def get_hub():
     global hub
     try:
-        hub = HubInstance()
+        hub = HubInstance(refresh_token=True)
     except Exception as e:
-        print(e)
+        print("There was an exception thrown while creating the Hub instance object: {}".format(e))
+        print("It is required that this script be executed in the same directory as .restconfig.json")
+        print(".restconfig.json must contain an API token for authentication")
         return None
     else:
         return hub
@@ -138,7 +140,7 @@ def get_license_names_and_family(bom_component):
     if response.status_code == 200:
         license_details = response.json()
         result.append(license_details.get("name"))
-        result.append(license_details.get("licenseFamily")["name"])
+        result.append(license_details.get("licenseFamily")["name"] if license_details.get("licenseFamily") else "")
         return result
     else:
         return result

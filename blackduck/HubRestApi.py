@@ -90,25 +90,28 @@ class HubInstance(object):
     # For refresh to find the .restconfig.json file upon reinitialization,
     # client script must be executed in the same directory
     root_dir = os.getcwd()
+    refresh_token = False
     def __init__(self, *args, **kwargs):
         # Config needs to be an instance variable for thread-safety, concurrent use of HubInstance()
         self.config = {}
         self.read_config()
-        # try:
-        #     self.config['baseurl'] = args[0]
-        #     api_token = kwargs.get('api_token', False)
-        #     if api_token:
-        #         self.config['api_token'] = api_token
-        #     else:
-        #         self.config['username'] = args[1]
-        #         self.config['password'] = args[2]
-        #     self.config['insecure'] = kwargs.get('insecure', False)
-        #     self.config['debug'] = kwargs.get('debug', False)
-        #
-        #     if kwargs.get('write_config_flag', False):
-        #         self.write_config()
-        # except Exception:
-        #     self.read_config()
+        self.refresh_token = kwargs.get('refresh_token')
+        if not kwargs.get('refresh_token', False):
+            try:
+                self.config['baseurl'] = args[0]
+                api_token = kwargs.get('api_token', False)
+                if api_token:
+                    self.config['api_token'] = api_token
+                else:
+                    self.config['username'] = args[1]
+                    self.config['password'] = args[2]
+                self.config['insecure'] = kwargs.get('insecure', False)
+                self.config['debug'] = kwargs.get('debug', False)
+
+                if kwargs.get('write_config_flag', True):
+                    self.write_config()
+            except Exception:
+                self.read_config()
             
         if self.config['insecure']:
             requests.packages.urllib3.disable_warnings()
@@ -243,6 +246,7 @@ class HubInstance(object):
 
     def reauthenticate(self, *args, **kwargs):
         try:
+            kwargs.update({"refresh_token":self.refresh_token})
             self.__init__(self, *args, **kwargs)
         except Exception as e:
             print("There was an error when refreshing the token: {}".format(e))
@@ -254,7 +258,7 @@ class HubInstance(object):
         @staticmethod
         def refresh_token(decorated):
             def wrapper(hub_api_object, *args, **kwargs):
-                if time.time() > hub_api_object.access_token_expiration:
+                if time.time() > hub_api_object.access_token_expiration and hub_api_object.refresh_token:
                     hub_api_object.reauthenticate(hub_api_object, *args, **kwargs)
                 return decorated(hub_api_object, *args, **kwargs)
 

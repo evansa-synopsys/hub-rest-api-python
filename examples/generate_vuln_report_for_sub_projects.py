@@ -478,6 +478,7 @@ def vcr_info(v_name_key, vuln_component_remediation_info):
                 "{} with err {} for {}".format("No cvss2 or cvss3 score for vulnerability, writing empty value", err,
                                                v_name_key))
             result.append("")
+            result.append("")
         else:
             result.append(cvs_severity)
             result.append(format_leading_zeros(cvs_score))

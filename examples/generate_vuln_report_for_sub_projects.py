@@ -196,9 +196,10 @@ def build_upgrade_guidance(components):
 
 
 # return a dictionary with remediation details from a call to /REMEDIATION endpoint
-def build_component_remediation_data(vulnerable_components):
+def build_component_remediation_data(vulnerable_components, componentName, componentVersion):
     remediation_data = dict()
-    for info in vulnerable_components['items']:
+    vc = [x for x in vulnerable_components['items'] if x.get('componentName') == componentName and x.get('componentVersionName') == componentVersion]
+    for info in vc:
         response = hub.execute_get(info['_meta']['href'])
         if response.status_code == 200:
             rd = response.json()
@@ -313,7 +314,11 @@ def append_component_info(component, package_type, url_and_des, license_names_an
 
 def append_vulnerabilities(package_type, component_vuln_information, row_list, row, license_names_and_family,
                            component_remediating_info, comp_version_url, url_and_des, component,
-                           vuln_component_remediation_info, project_name, project_version, upgrade_guidance):
+                           vulnerable_components, project_name, project_version, upgrade_guidance):
+    name = component['componentName']
+    version = component['componentVersionName']
+    vuln_component_remediation_info = build_component_remediation_data(vulnerable_components, name, version)
+
     global comp_origin_url
     rl = row_list
     r = row
@@ -330,8 +335,20 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         row.append("")
         row.append("")
 
-    r.append(component['componentName'])
-    r.append(format_leading_zeros(component['componentVersionName']))
+    r.append(name)
+    r.append(format_leading_zeros(version))
+
+    diff = [x for x in vuln_component_remediation_info.keys() if x not in [y.get('name') for y in component_vuln_information]]
+    for vuln in diff:
+        r.append(vuln)
+        r.extend(vcr_info(vuln, vuln_component_remediation_info))
+        r.extend(add_short_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
+        r.extend(add_rem_comment(vuln, vuln_component_remediation_info))
+        r.extend(add_license_name_and_family(license_names_and_family))
+        r.extend(add_url_and_desc(url_and_des))
+        r.extend(add_long_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
+        rl.append(r.copy())
+        r = r[0:6]
 
     for vuln in component_vuln_information:
         v_name_key = vuln['name']
@@ -355,113 +372,149 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
                 r.append("{}({})".format(nvd_name, v_name_key))
         except (IndexError, TypeError, KeyError) as err:
             logging.debug("{} with err {}, using default {} instead".format("failed to get vulnerability record name "
-                                                                            "and source", err, v_name_key))
+                                                             "and source", err, v_name_key))
             r.append(v_name_key)
-        r.append(vuln['severity'])
 
-        # prioritizes cvss3 over cvss2
-        try:
-            cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore')
-        except (KeyError, TypeError) as err:
-            try:
-                cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore')
-            except(KeyError, TypeError) as err:
-                logging.debug("{} with err {}".format("failed to get cvs3 and cvs2 scores", err))
-                r.append("")
-            else:
-                r.append(format_leading_zeros(cvs_score))
-        else:
-            r.append(format_leading_zeros(cvs_score))
-
-        try:
-            rem_status = vuln_component_remediation_info.get(v_name_key)['remediationStatus']
-        except(KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("failed to get remediationStatus", err))
-            r.append("")
-        else:
-            r.append(rem_status)
-
-        try:
-            published_date = clean_up_date(vuln['publishedDate'])
-            updated_date = clean_up_date(vuln['updatedDate'])
-        except(KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("failed to get remediationStatus", err))
-            r.append("")
-            r.append("")
-        else:
-            r.append(published_date)
-            r.append(updated_date)
-
-        try:
-            created_at = clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt'])
-        except (KeyError, TypeError) as err:
-            logging.debug("{} with err {}".format("failed to get createdAt date", err))
-            r.append("")
-        else:
-            r.append(created_at)
-        try:
-            comp_origin_url = get_origin_url(component)
-            assert comp_origin_url, "No origin url, use version url"
-            upgrade_target = upgrade_guidance.get(comp_origin_url)['shortTerm']['versionName']
-        except AssertionError as err:
-            try:
-                upgrade_target = upgrade_guidance.get(comp_version_url)['shortTerm']['versionName']
-                assert upgrade_target, "No short term upgrade guidance found for {} , writing an empty value".format(
-                    comp_version_url)
-                r.append(format_leading_zeros(upgrade_target))
-            except AssertionError:
-                r.append("")
-        except (KeyError, TypeError) as err:
-            logging.debug(
-                "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
-            r.append("")
-        else:
-            r.append(format_leading_zeros(upgrade_target))
-        try:
-            rem_comment = vuln_component_remediation_info.get(v_name_key).get('comment')
-        except (KeyError, TypeError, AttributeError) as err:
-            logging.debug("No remediation comment available for {} with error {}".format(v_name_key, err))
-            r.append("")
-        else:
-            r.append(rem_comment)
-
-        try:
-            l_name = license_names_and_family[0]
-            l_family = license_names_and_family[1]
-        except(KeyError, IndexError, TypeError) as err:
-            logging.debug("{} with err {}".format("Failed to get license name and family", err))
-            r.append("")
-            r.append("")
-        else:
-            r.append(l_name)
-            r.append(l_family)
-
-        for ud in url_and_des:
-            if not ud:
-                r.append("")
-            else:
-                r.append(ud)
-        try:
-            comp_origin_url = get_origin_url(component)
-            assert comp_origin_url, "No origin url, use version url"
-            upgrade_target = upgrade_guidance.get(comp_origin_url)['longTerm']['versionName']
-        except AssertionError as err:
-            try:
-                upgrade_target = upgrade_guidance.get(comp_version_url)['longTerm']['versionName']
-                assert upgrade_target, "No long term upgrade guidance found for {} , writing an empty value".format(
-                    comp_version_url)
-                r.append(format_leading_zeros(upgrade_target))
-            except AssertionError:
-                r.append("")
-        except (KeyError, TypeError) as err:
-            logging.debug(
-                "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
-            r.append("")
-        else:
-            r.append(format_leading_zeros(upgrade_target))
+        r.extend(vcr_info(v_name_key, vuln_component_remediation_info))
+        r.extend(add_short_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
+        r.extend(add_rem_comment(v_name_key, vuln_component_remediation_info))
+        r.extend(add_license_name_and_family(license_names_and_family))
+        r.extend(add_url_and_desc(url_and_des))
+        r.extend(add_long_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
         rl.append(r.copy())
         r = r[0:6]
     return rl
+
+
+def add_license_name_and_family(license_names_and_family):
+    result = []
+    try:
+        l_name = license_names_and_family[0]
+        l_family = license_names_and_family[1]
+    except(KeyError, IndexError, TypeError) as err:
+        logging.debug("{} with err {}".format("Failed to get license name and family", err))
+        result.append("")
+        result.append("")
+    else:
+        result.append(l_name)
+        result.append(l_family)
+    return result
+
+
+def add_url_and_desc(url_and_des):
+    result = []
+    for ud in url_and_des:
+        result.append("" if not ud else ud)
+    return result
+
+
+def add_long_term_upgrade_guidance(comp_version_url, component, upgrade_guidance):
+    global comp_origin_url
+    result = []
+    try:
+        comp_origin_url = get_origin_url(component)
+        assert comp_origin_url, "No origin url, use version url"
+        upgrade_target = upgrade_guidance.get(comp_origin_url)['longTerm']['versionName']
+    except AssertionError as err:
+        try:
+            upgrade_target = upgrade_guidance.get(comp_version_url)['longTerm']['versionName']
+            assert upgrade_target, "No long term upgrade guidance found for {} , writing an empty value".format(
+                comp_version_url)
+            result.append(format_leading_zeros(upgrade_target))
+        except AssertionError:
+            result.append("")
+    except (KeyError, TypeError) as err:
+        logging.debug(
+            "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
+        result.append("")
+    else:
+        result.append(format_leading_zeros(upgrade_target))
+    return result
+
+
+def add_rem_comment(v_name_key, vuln_component_remediation_info):
+    result = []
+    try:
+        rem_comment = vuln_component_remediation_info.get(v_name_key).get('comment')
+    except (KeyError, TypeError, AttributeError) as err:
+        logging.debug("No remediation comment available for {} with error {}".format(v_name_key, err))
+        result.append("")
+    else:
+        result.append(rem_comment)
+    return result
+
+
+def add_short_term_upgrade_guidance(comp_version_url, component, upgrade_guidance):
+    global comp_origin_url
+    result = []
+    try:
+        comp_origin_url = get_origin_url(component)
+        assert comp_origin_url, "No origin url, use version url"
+        upgrade_target = upgrade_guidance.get(comp_origin_url)['shortTerm']['versionName']
+    except AssertionError as err:
+        try:
+            upgrade_target = upgrade_guidance.get(comp_version_url)['shortTerm']['versionName']
+            assert upgrade_target, "No short term upgrade guidance found for {} , writing an empty value".format(
+                comp_version_url)
+            result.append(format_leading_zeros(upgrade_target))
+        except AssertionError:
+            result.append("")
+    except (KeyError, TypeError) as err:
+        logging.debug(
+            "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
+        result.append("")
+    else:
+        result.append(format_leading_zeros(upgrade_target))
+    return result
+
+
+def vcr_info(v_name_key, vuln_component_remediation_info):
+    result = []
+    # prioritizes cvss3 over cvss2
+    try:
+        cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore')
+        cvs_severity = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('severity')
+    except (KeyError, TypeError) as err:
+        try:
+            cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore')
+            cvs_severity = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('severity')
+        except(KeyError, TypeError) as err:
+            logging.debug("{} with err {} for {}".format("failed to get cvs2 and cvs3 scores", err, v_name_key))
+            result.append("")
+        else:
+            result.append(cvs_severity)
+            result.append(format_leading_zeros(cvs_score))
+    else:
+        result.append(cvs_severity)
+        result.append(format_leading_zeros(cvs_score))
+
+    try:
+        rem_status = vuln_component_remediation_info.get(v_name_key).get('remediationStatus')
+    except(KeyError, TypeError) as err:
+        logging.debug("{} with err {} for {}".format("failed to get remediationStatus", err, v_name_key))
+        result.append("")
+    else:
+        result.append(rem_status)
+
+    try:
+        published_date = clean_up_date(vuln_component_remediation_info.get(v_name_key).get('publishedDate'))
+        updated_date = clean_up_date(vuln_component_remediation_info.get(v_name_key).get('lastModifiedDate'))
+    except(KeyError, TypeError) as err:
+        logging.debug("{} with err {} for {}".format("failed to get remediationStatus", err, v_name_key))
+        result.append("")
+        result.append("")
+    else:
+        result.append(published_date)
+        result.append(updated_date)
+
+    try:
+        created_at = clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt'])
+    except (KeyError, TypeError) as err:
+        logging.debug("{} with err {} for {}".format("failed to get createdAt date", err, v_name_key))
+        result.append("")
+    else:
+        result.append(created_at)
+    return result
 
 
 subprojects = list()
@@ -476,7 +529,7 @@ def generate_child_reports(component):
                                                             child_project_components['totalCount']))
     upgrade_guidance = build_upgrade_guidance(child_project_components)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
-    child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
+    # child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
     child_timestamp = time.strftime('%m_%d_%Y_%H_%M_%S')
     child_file_out = (projname + '_' + "subproject_src_report-" + child_timestamp)
     child_file_out = (child_file_out + ".csv")
@@ -514,7 +567,7 @@ def generate_child_reports(component):
                 row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
                                                   license_names_and_family,
                                                   component_remediating_info, comp_version_url, url_and_des, component,
-                                                  child_vuln_component_remediation_info, child_project_name,
+                                                  child_vulnerable_components, child_project_name,
                                                   child_project_version_name, upgrade_guidance)
             for row in row_list:
                 writer.writerow(row)
@@ -529,7 +582,7 @@ def genreport():
                                                             components['totalCount']))
     upgrade_guidance = build_upgrade_guidance(components)
     vulnerable_components = hub.get_vulnerable_bom_components(projversion)
-    vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
+    # vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)
     project_name = args.project_name
     project_version = args.version_name
     curdir = os.getcwd()
@@ -568,7 +621,7 @@ def genreport():
                 row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
                                                   license_names_and_family,
                                                   component_remediating_info, comp_version_url, url_and_des, component,
-                                                  vuln_component_remediation_info, project_name, project_version,
+                                                  vulnerable_components, project_name, project_version,
                                                   upgrade_guidance)
 
             for row in row_list:

@@ -266,8 +266,9 @@ def get_header():
             "Download URL", "Component Description", "Latest Version Available"]
 
 
-def append_component_info(component, package_type, url_and_des, license_names_and_family, comp_version_url,
-                          component_remediating_info, project_name, project_version):
+def append_component_info(component, package_type, url_and_des, license_names_and_family, comp_version_url, project_name, project_version):
+    name = component['componentName']
+    version = component['componentVersionName']
     row = []
     if project_name:
         row.append(project_name)
@@ -280,8 +281,8 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append("")
         row.append("")
 
-    row.append(component['componentName'])
-    row.append(format_leading_zeros(component['componentVersionName']))
+    row.append(name)
+    row.append(format_leading_zeros(version))
 
     component_row_list = []
     for i in range(9):
@@ -291,21 +292,14 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append(license_names_and_family[0])
         row.append(license_names_and_family[1])
     except IndexError as er:
-        logging.debug("no license information found for:{} {} ".format(component['componentName'], er))
+        logging.debug("no license information found for:{} {}, writing empty values ".format(name, er))
         row.append("")
         row.append("")
 
-    for ud in url_and_des:
-        if not ud:
-            row.append("")
-        else:
-            row.append(ud)
-    try:
-        latest_after_current = component_remediating_info.get(comp_version_url)['latestAfterCurrent'].get('name')
-    except (KeyError, TypeError):
-        row.append(component['componentVersionName'])
-    else:
-        row.append(format_leading_zeros(latest_after_current))
+    row.extend(add_url_and_desc(url_and_des))
+
+    #latestAfterCurrent release is no longer available from the API.
+    row.append(format_leading_zeros(version))
 
     component_row_list.append(row.copy())
 
@@ -313,8 +307,9 @@ def append_component_info(component, package_type, url_and_des, license_names_an
 
 
 def append_vulnerabilities(package_type, component_vuln_information, row_list, row, license_names_and_family,
-                           component_remediating_info, comp_version_url, url_and_des, component,
+                           comp_version_url, url_and_des, component,
                            vulnerable_components, project_name, project_version, upgrade_guidance):
+
     name = component['componentName']
     version = component['componentVersionName']
     vuln_component_remediation_info = build_component_remediation_data(vulnerable_components, name, version)
@@ -474,12 +469,14 @@ def vcr_info(v_name_key, vuln_component_remediation_info):
     try:
         cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('baseScore')
         cvs_severity = vuln_component_remediation_info.get(v_name_key)['cvss3'].get('severity')
-    except (KeyError, TypeError) as err:
+    except (KeyError, TypeError, AttributeError) as err:
         try:
             cvs_score = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('baseScore')
             cvs_severity = vuln_component_remediation_info.get(v_name_key)['cvss2'].get('severity')
-        except(KeyError, TypeError) as err:
-            logging.debug("{} with err {} for {}".format("failed to get cvs2 and cvs3 scores", err, v_name_key))
+        except(KeyError, TypeError, AttributeError) as err:
+            logging.debug(
+                "{} with err {} for {}".format("No cvss2 or cvss3 score for vulnerability, writing empty value", err,
+                                               v_name_key))
             result.append("")
         else:
             result.append(cvs_severity)
@@ -490,8 +487,10 @@ def vcr_info(v_name_key, vuln_component_remediation_info):
 
     try:
         rem_status = vuln_component_remediation_info.get(v_name_key).get('remediationStatus')
-    except(KeyError, TypeError) as err:
-        logging.debug("{} with err {} for {}".format("failed to get remediationStatus", err, v_name_key))
+    except(KeyError, TypeError, AttributeError) as err:
+        logging.debug(
+            "{} with err {} for {}".format("failed to get remediationStatus for vulnerability, writing empty value",
+                                           err, v_name_key))
         result.append("")
     else:
         result.append(rem_status)
@@ -499,8 +498,10 @@ def vcr_info(v_name_key, vuln_component_remediation_info):
     try:
         published_date = clean_up_date(vuln_component_remediation_info.get(v_name_key).get('publishedDate'))
         updated_date = clean_up_date(vuln_component_remediation_info.get(v_name_key).get('lastModifiedDate'))
-    except(KeyError, TypeError) as err:
-        logging.debug("{} with err {} for {}".format("failed to get remediationStatus", err, v_name_key))
+    except(KeyError, TypeError, AttributeError) as err:
+        logging.debug(
+            "{} with err {} for {}".format("failed to get remediationStatus for vulnerability, writing empty value",
+                                           err, v_name_key))
         result.append("")
         result.append("")
     else:
@@ -509,8 +510,10 @@ def vcr_info(v_name_key, vuln_component_remediation_info):
 
     try:
         created_at = clean_up_date(vuln_component_remediation_info.get(v_name_key)['createdAt'])
-    except (KeyError, TypeError) as err:
-        logging.debug("{} with err {} for {}".format("failed to get createdAt date", err, v_name_key))
+    except (KeyError, TypeError, AttributeError) as err:
+        logging.debug(
+            "{} with err {} for {}".format("failed to get createdAt date for vulnerability, writing empty value", err,
+                                           v_name_key))
         result.append("")
     else:
         result.append(created_at)
@@ -545,7 +548,6 @@ def generate_child_reports(component):
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
             comp_version_url = component.get('componentVersion')
-            component_remediating_info = get_component_remediating_data(comp_version_url)
             try:
                 component_vuln_information = get_component_vuln_information(component)
             except requests.exceptions.HTTPError as err:
@@ -561,12 +563,12 @@ def generate_child_reports(component):
             row_list = []
             if len(component_vuln_information) <= 0:
                 row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
-                                                 comp_version_url, component_remediating_info, child_project_name,
+                                                 comp_version_url, child_project_name,
                                                  child_project_version_name)
             elif len(component_vuln_information) > 0:
                 row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
                                                   license_names_and_family,
-                                                  component_remediating_info, comp_version_url, url_and_des, component,
+                                                  comp_version_url, url_and_des, component,
                                                   child_vulnerable_components, child_project_name,
                                                   child_project_version_name, upgrade_guidance)
             for row in row_list:
@@ -600,7 +602,6 @@ def genreport():
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
             comp_version_url = component.get('componentVersion')
-            component_remediating_info = get_component_remediating_data(comp_version_url)
             try:
                 component_vuln_information = get_component_vuln_information(component)
             except requests.exceptions.HTTPError as err:
@@ -615,12 +616,12 @@ def genreport():
             row_list = []
             if len(component_vuln_information) <= 0:
                 row_list = append_component_info(component, package_type, url_and_des, license_names_and_family,
-                                                 comp_version_url, component_remediating_info, project_name,
+                                                 comp_version_url, project_name,
                                                  project_version)
             elif len(component_vuln_information) > 0:
                 row_list = append_vulnerabilities(package_type, component_vuln_information, row_list, row,
                                                   license_names_and_family,
-                                                  component_remediating_info, comp_version_url, url_and_des, component,
+                                                  comp_version_url, url_and_des, component,
                                                   vulnerable_components, project_name, project_version,
                                                   upgrade_guidance)
 

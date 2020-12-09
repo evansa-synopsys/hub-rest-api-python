@@ -247,6 +247,8 @@ def get_upgrade_guidance_version_name(comp_version_url):
         return upgrade_target_version
     return upgrade_target_version
 
+def quote_versions(s):
+    return "{}{}{}".format("\"",s, "\"")
 
 def format_leading_zeros(n):
     match_re = '^0+[0-9]+\.*[0-9]*'
@@ -282,7 +284,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
         row.append("")
 
     row.append(name)
-    row.append(format_leading_zeros(version))
+    row.append(quote_versions(version))
 
     component_row_list = []
     for i in range(9):
@@ -299,7 +301,7 @@ def append_component_info(component, package_type, url_and_des, license_names_an
     row.extend(add_url_and_desc(url_and_des))
 
     #latestAfterCurrent release is no longer available from the API.
-    row.append(format_leading_zeros(version))
+    row.append(quote_versions(version))
 
     component_row_list.append(row.copy())
 
@@ -331,7 +333,7 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
         row.append("")
 
     r.append(name)
-    r.append(format_leading_zeros(version))
+    r.append(quote_versions(version))
 
     diff = [x for x in vuln_component_remediation_info.keys() if x not in [y.get('name') for y in component_vuln_information]]
     for vuln in diff:

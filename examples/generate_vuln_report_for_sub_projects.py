@@ -335,41 +335,13 @@ def append_vulnerabilities(package_type, component_vuln_information, row_list, r
     r.append(name)
     r.append(quote_versions(version))
 
-    diff = [x for x in vuln_component_remediation_info.keys() if x not in [y.get('name') for y in component_vuln_information]]
-    for vuln in diff:
-        r.append(vuln)
-        r.extend(vcr_info(vuln, vuln_component_remediation_info))
-        r.extend(add_short_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
-        r.extend(add_rem_comment(vuln, vuln_component_remediation_info))
-        r.extend(add_license_name_and_family(license_names_and_family))
-        r.extend(add_url_and_desc(url_and_des))
-        r.extend(add_long_term_upgrade_guidance(comp_version_url, component, upgrade_guidance))
-        rl.append(r.copy())
-        r = r[0:6]
-
     for vuln in component_vuln_information:
-        v_name_key = vuln['name']
-        try:
-            nvd_name = ""
-            related_vulnerabilities = [row for row in vuln['_meta']['links'] if
-                                       row.get('rel') == "related-vulnerabilities"]
-            if related_vulnerabilities[0].get('label') == "NVD":
-                nvd = related_vulnerabilities[0]['href'].split('/')
-                nvd_name = nvd[len(nvd) - 1]
-            elif v_name_key and vuln['_meta']['links'][1]:
-                nvd = vuln['_meta']['links'][1]['href'].split('/')
-                nvd_name = nvd[len(nvd) - 1]
-                if nvd_name == "default-remediation-status":
-                    nvd_name = nvd[len(nvd) - 2]
-            if vuln['source'] == "NVD":
-                r.append(v_name_key)
-            elif nvd_name.startswith("CWE"):
-                r.append(v_name_key)
-            else:
-                r.append("{}({})".format(nvd_name, v_name_key))
-        except (IndexError, TypeError, KeyError) as err:
-            logging.debug("{} with err {}, using default {} instead".format("failed to get vulnerability record name "
-                                                             "and source", err, v_name_key))
+        v_name_key = vuln.get('vulnerabilityWithRemediation').get('vulnerabilityName')
+        if vuln.get('vulnerabilityWithRemediation').get('relatedVulnerability'):
+            nvd = vuln.get('vulnerabilityWithRemediation').get('relatedVulnerability').split('/')
+            nvd_name = nvd[len(nvd) - 1]
+            r.append("{}({})".format(nvd_name, v_name_key))
+        else:
             r.append(v_name_key)
 
         r.extend(vcr_info(v_name_key, vuln_component_remediation_info))
@@ -551,12 +523,7 @@ def generate_child_reports(component):
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
             comp_version_url = component.get('componentVersion')
-            try:
-                component_vuln_information = get_component_vuln_information(component)
-            except requests.exceptions.HTTPError as err:
-                component_vuln_information = []
-                logging.debug(
-                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
+            component_vuln_information = [x for x in child_vulnerable_components['items'] if x['componentVersion'] == component['componentVersion']]
             row = []
             if first_child_file:
                 header = get_header()
@@ -605,12 +572,7 @@ def genreport():
             url_and_des = get_component_URL_and_description(component)
             license_names_and_family = get_license_names_and_family(component)
             comp_version_url = component.get('componentVersion')
-            try:
-                component_vuln_information = get_component_vuln_information(component)
-            except requests.exceptions.HTTPError as err:
-                component_vuln_information = []
-                logging.debug(
-                    "Http Error while getting component vulnerability info for: {} {}".format(comp_version_url, err))
+            component_vuln_information = [x for x in vulnerable_components['items'] if x['componentVersion'] == component['componentVersion']]
             row = []
             if first_file:
                 header = get_header()

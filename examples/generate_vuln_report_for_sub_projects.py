@@ -248,7 +248,7 @@ def get_upgrade_guidance_version_name(comp_version_url):
     return upgrade_target_version
 
 def quote_versions(s):
-    return "{}{}{}".format("\"",s, "\"")
+    return "{}{}{}".format("=\"",s, "\"")
 
 def format_leading_zeros(n):
     match_re = '^0+[0-9]+\.*[0-9]*'

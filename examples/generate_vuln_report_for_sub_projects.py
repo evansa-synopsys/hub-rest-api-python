@@ -498,7 +498,7 @@ def generate_child_reports(component):
     child_project_version = hub.get_project_version_by_name(child_project_name, child_project_version_name)
     child_project_components = hub.get_version_components(child_project_version, 10000)
     print("Component count returned for {} {} = {} ".format(child_project_name, child_project_version_name,
-                                                            child_project_components['totalCount']))
+                                                            len(child_project_components.get('items'))))
     upgrade_guidance = build_upgrade_guidance(child_project_components)
     child_vulnerable_components = hub.get_vulnerable_bom_components(child_project_version)
     # child_vuln_component_remediation_info = build_component_remediation_data(child_vulnerable_components)
@@ -545,7 +545,7 @@ def genreport():
     projversion = hub.get_project_version_by_name(args.project_name, args.version_name)
     components = hub.get_version_components(projversion, 10000)
     print("Component count returned for {} {} = {} ".format(args.project_name, args.version_name,
-                                                            components['totalCount']))
+                                                            len(components.get('items'))))
     upgrade_guidance = build_upgrade_guidance(components)
     vulnerable_components = hub.get_vulnerable_bom_components(projversion)
     # vuln_component_remediation_info = build_component_remediation_data(vulnerable_components)

@@ -382,20 +382,17 @@ def add_long_term_upgrade_guidance(comp_version_url, component, upgrade_guidance
     result = []
     try:
         comp_origin_url = get_origin_url(component)
-        assert comp_origin_url, "No origin url, use version url"
-        upgrade_target = upgrade_guidance.get(comp_origin_url)['longTerm']['versionName']
-    except AssertionError as err:
+        upgrade_target = upgrade_guidance.get(comp_origin_url).get('longTerm').get('versionName')
+    except AttributeError as err:
         try:
-            upgrade_target = upgrade_guidance.get(comp_version_url)['longTerm']['versionName']
-            assert upgrade_target, "No long term upgrade guidance found for {} , writing an empty value".format(
-                comp_version_url)
-            result.append(format_leading_zeros(upgrade_target))
-        except AssertionError:
+            upgrade_target = upgrade_guidance.get(comp_version_url).get('longTerm').get('versionName')
+        except AttributeError as err:
+            logging.debug(
+                "No longTerm upgrade-guidance found for component {}, with error: {} "
+                "writing an empty value".format(comp_origin_url, err))
             result.append("")
-    except (KeyError, TypeError) as err:
-        logging.debug(
-            "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
-        result.append("")
+        else:
+            result.append(format_leading_zeros(upgrade_target))
     else:
         result.append(format_leading_zeros(upgrade_target))
     return result
@@ -418,20 +415,17 @@ def add_short_term_upgrade_guidance(comp_version_url, component, upgrade_guidanc
     result = []
     try:
         comp_origin_url = get_origin_url(component)
-        assert comp_origin_url, "No origin url, use version url"
-        upgrade_target = upgrade_guidance.get(comp_origin_url)['shortTerm']['versionName']
-    except AssertionError as err:
+        upgrade_target = upgrade_guidance.get(comp_origin_url).get('shortTerm').get('versionName')
+    except AttributeError as err:
         try:
-            upgrade_target = upgrade_guidance.get(comp_version_url)['shortTerm']['versionName']
-            assert upgrade_target, "No short term upgrade guidance found for {} , writing an empty value".format(
-                comp_version_url)
-            result.append(format_leading_zeros(upgrade_target))
-        except AssertionError:
+            upgrade_target = upgrade_guidance.get(comp_version_url).get('shortTerm').get('versionName')
+        except AttributeError as err:
+            logging.debug(
+                "No shortTerm upgrade-guidance found for component {}, with error: {} "
+                "writing an empty value".format(comp_origin_url, err))
             result.append("")
-    except (KeyError, TypeError) as err:
-        logging.debug(
-            "No upgrade guidance found for {}, with error {}, writing an empty value".format(comp_origin_url, err))
-        result.append("")
+        else:
+            result.append(format_leading_zeros(upgrade_target))
     else:
         result.append(format_leading_zeros(upgrade_target))
     return result
@@ -589,6 +583,10 @@ def genreport():
                                                   comp_version_url, url_and_des, component,
                                                   vulnerable_components, project_name, project_version,
                                                   upgrade_guidance)
+            try:
+                logging.debug("{} row(s) written for component {} {}".format(len(row_list), row_list[0][4].strip("\""), row_list[0][5].strip("\"")))
+            except Exception as err:
+                logging.debug("exception thrown while counting rows {}".format(err))
 
             for row in row_list:
                 writer.writerow(row)
